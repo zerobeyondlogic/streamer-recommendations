@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { FilterSelect } from "@/components/filter-select";
+import { MobileFilterDisclosure } from "@/components/mobile-filter-disclosure";
 import { categories, categoryLabels, contentStatusLabel, contentStatuses, type Category, type FeedSort } from "@/lib/config";
 import { getPublicFeed } from "@/lib/data";
 import { formatDate } from "@/lib/view";
@@ -23,6 +24,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   const feed = await getPublicFeed({ category, status, q, sort, hostRecommended, page });
   const sectionTitle = category ? `${categoryLabels[category]}推荐` : "最近的作品推荐";
   const nextPage = new URLSearchParams({ ...(category ? { category } : {}), ...(status ? { status } : {}), ...(q ? { q } : {}), sort, ...(hostRecommended ? { hostRecommended: "1" } : {}), page: String(page + 1) });
+  const activeFilterCount = Number(Boolean(q)) + Number(Boolean(category)) + Number(Boolean(status)) + Number(sort === "score") + Number(hostRecommended);
 
   return <div className="page-shell">
     <section className="hero">
@@ -31,14 +33,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
     </section>
     <section id="feed" className="feed-section">
       <div className="section-heading"><div><span className="eyebrow">{category ? `${categoryLabels[category]}专栏` : "首页 · 综合时间流"}</span><h2>{sectionTitle}</h2></div><span className="live-dot"><i /> 置顶始终优先</span></div>
-      <form className="filters feed-filters" action="/" method="get">
+      <MobileFilterDisclosure activeFilterCount={activeFilterCount}>
+      <form className="filters feed-filters" action="/" method="get" data-testid="feed-filters">
         <label>作品名称搜索<input name="q" defaultValue={q} placeholder="输入作品名称…" maxLength={100} /></label>
         <FilterSelect name="category" label="分类" defaultValue={category ?? ""} options={[{ value: "", label: "首页 · 全部" }, ...categories.map((item) => ({ value: item, label: categoryLabels[item] }))]} />
         <FilterSelect name="status" label="作品状态" defaultValue={status} options={[{ value: "", label: "全部状态" }, ...contentStatuses.map((item) => ({ value: item, label: item === "pending" ? "待体验" : item === "in_progress" ? "进行中" : item === "completed" ? "已完成 / 已玩" : "已放弃" }))]} />
         <FilterSelect name="sort" label="排序" defaultValue={sort} options={[{ value: "time", label: "最近动态" }, { value: "score", label: "评分从高到低" }]} />
         <label className="host-recommend-filter"><span>推荐范围</span><span className="check-surface"><input name="hostRecommended" value="1" type="checkbox" defaultChecked={hostRecommended} /><span>只看神绮爱推荐</span></span></label>
         <button className="button small primary" type="submit">筛选</button><Link href={category ? `/?category=${category}` : "/"} className="button small ghost">清空</Link>
-      </form>
+      </form></MobileFilterDisclosure>
       {!process.env.DATABASE_URL ? <Notice type="info">网站代码已准备好。站长配置 Neon 数据库并执行迁移后，投稿时间流就会在这里开始生长。</Notice> : null}
       <div className="feed-grid">
         {feed.map((item) => {
