@@ -67,7 +67,7 @@ export async function submitAction(form: FormData) {
   if (!parsed.success) go("/submit", parsed.error.issues[0]?.message ?? "投稿内容有误");
   await createSubmission(user.id, parsed.data);
   revalidatePath("/me/submissions");
-  go("/me/submissions", "投稿已送达主播收件箱", "success");
+  go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
 }
 
 export async function createHostRecommendationAction(form: FormData) {
@@ -83,14 +83,14 @@ export async function createHostRecommendationAction(form: FormData) {
   try { row = await createHostRecommendation(host.id, parsed.data); }
   catch (error) { go("/host/recommend", error instanceof Error ? error.message : "发布失败"); }
   revalidatePath("/"); revalidatePath("/host/library");
-  go(`/host/submission/${row.id}`, "主播原创推荐已直接公开", "success");
+  go(`/host/submission/${row.id}`, "神绮爱原创推荐已直接公开", "success");
 }
 
 export async function deleteOwnSubmissionAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const ok = await deleteOwnUnreadSubmission(user.id, value(form, "submissionId"));
   revalidatePath("/me/submissions");
-  if (!ok) go("/me/submissions", "只有主播尚未查看的投稿可以撤回");
+  if (!ok) go("/me/submissions", "只有神绮爱尚未查看的投稿可以撤回");
   go("/me/submissions", "投稿已撤回", "success");
 }
 
@@ -147,7 +147,7 @@ export async function replyAction(form: FormData) {
   });
   if (!parsed.success || !parsed.data.reply) go(`/host/submission/${value(form, "submissionId")}`, parsed.error?.issues[0]?.message ?? "请填写感想");
   await saveHostReply(host.id, parsed.data.submissionId, parsed.data.reply, parsed.data.republish, parsed.data.notifyAgain);
-  revalidatePath("/"); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "主播感想已保存", "success");
+  revalidatePath("/"); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "神绮爱感想已保存", "success");
 }
 
 export async function themeAction(form: FormData) {

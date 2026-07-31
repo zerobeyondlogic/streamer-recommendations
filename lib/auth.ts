@@ -53,7 +53,7 @@ export async function login(username: string, password: string) {
   if (!user || !(await compare(parsed.data.password, user.passwordHash))) {
     return { ok: false as const, error: "用户名或密码错误" };
   }
-  if (user.status === "pending") return { ok: false as const, error: "B 站 UID 还在等待主播核验，请先完成主页签名验证" };
+  if (user.status === "pending") return { ok: false as const, error: "B 站 UID 还在等待神绮爱核验，请先完成主页签名验证" };
   if (user.status !== "active") return { ok: false as const, error: "用户名或密码错误" };
   await setSession(user.id);
   return { ok: true as const };

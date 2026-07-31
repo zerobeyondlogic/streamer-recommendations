@@ -7,7 +7,7 @@ import { normalizeTitle, publicSubmitter } from "./security";
 import { firstOpenPatch, replyEffects } from "./transitions";
 
 export const defaultSettings = {
-  id: "default", siteName: "主播的作品放映室", siteTagline: "把你喜欢的作品，轻轻放进我的收件箱",
+  id: "default", siteName: "神绮爱的作品放映室", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
   backgroundType: "built_in" as const, backgroundImageUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
