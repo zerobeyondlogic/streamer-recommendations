@@ -18,5 +18,5 @@ try{
   const [existing]=await getDb().select().from(users).where(eq(users.usernameNormalized,normalized)).limit(1);
   const passwordHash=await hash(parsed.password,12);
   if(existing){await getDb().update(users).set({role:"host",status:"active",passwordHash,updatedAt:new Date()}).where(eq(users.id,existing.id));console.log(`已将 ${existing.username} 更新为主播账号。`);}
-  else{await getDb().insert(users).values({username:parsed.username,usernameNormalized:normalized,passwordHash,role:"host"});console.log(`已创建主播账号 ${parsed.username}。`);}
+  else{await getDb().insert(users).values({username:parsed.username,usernameNormalized:normalized,passwordHash,role:"host",status:"active"});console.log(`已创建主播账号 ${parsed.username}。`);}
 }catch(error){console.error(error instanceof Error?error.message:"创建失败");process.exitCode=1;}finally{rl.close();await closeDb();}

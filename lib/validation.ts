@@ -4,7 +4,9 @@ import { categories, contentStatuses } from "./config";
 const text = (max: number) => z.string().trim().max(max);
 export const usernameSchema = z.string().trim().min(2, "用户名至少 2 个字符").max(32, "用户名最多 32 个字符").regex(/^[\p{L}\p{N}_-]+$/u, "用户名只能包含文字、数字、下划线和短横线");
 export const passwordSchema = z.string().min(8, "密码至少 8 位").max(128, "密码最多 128 位");
+export const bilibiliUidSchema = z.string().trim().regex(/^[1-9]\d{0,19}$/, "请输入正确的 B 站数字 UID");
 export const authSchema = z.object({ username: usernameSchema, password: passwordSchema });
+export const registrationSchema = authSchema.extend({ bilibiliUid: bilibiliUidSchema });
 
 export const submissionSchema = z.object({
   category: z.enum(categories),
@@ -35,6 +37,18 @@ export const hostUpdateSchema = z.object({
   reply: text(4000).optional(),
   republish: z.coerce.boolean().optional(),
   notifyAgain: z.coerce.boolean().optional(),
+});
+
+export const scoreSchema = z.union([z.literal(""), z.coerce.number().int().min(1).max(10)]).transform((value) => value === "" ? null : value);
+
+export const hostRecommendationSchema = submissionSchema.omit({ anonymousPublic: true }).extend({
+  contentStatus: z.enum(contentStatuses),
+  score: scoreSchema,
+  experience: text(4000).optional().transform((value) => value || null),
+  pin: z.coerce.boolean().default(false),
+  pinNote: text(300).optional().transform((value) => value || null),
+}).superRefine((value, context) => {
+  if (value.score !== null && value.contentStatus !== "completed") context.addIssue({ code: "custom", path: ["score"], message: "只有已完成的作品才能评分" });
 });
 
 export function contrastRatio(a: string, b: string) {

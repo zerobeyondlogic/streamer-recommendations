@@ -7,7 +7,7 @@ import { getDb } from "@/db";
 import { sessions, users, type User } from "@/db/schema";
 import { SESSION_DAYS } from "./config";
 import { createSessionToken, normalizeUsername, sha256 } from "./security";
-import { authSchema } from "./validation";
+import { authSchema, registrationSchema } from "./validation";
 
 const COOKIE_NAME = "sr_session";
 export type SafeUser = Pick<User, "id" | "username" | "role" | "status">;
@@ -21,19 +21,27 @@ async function setSession(userId: string) {
   });
 }
 
-export async function register(username: string, password: string) {
-  const parsed = authSchema.safeParse({ username, password });
+export async function register(username: string, password: string, bilibiliUid: string) {
+  const parsed = registrationSchema.safeParse({ username, password, bilibiliUid });
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "输入有误" };
   const normalized = normalizeUsername(parsed.data.username);
   const existing = await getDb().select({ id: users.id }).from(users).where(eq(users.usernameNormalized, normalized)).limit(1);
   if (existing.length) return { ok: false as const, error: "这个用户名已经被使用" };
   const passwordHash = await hash(parsed.data.password, 12);
+  const verificationCode = `SR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
   try {
-    const [user] = await getDb().insert(users).values({ username: parsed.data.username, usernameNormalized: normalized, passwordHash }).returning({ id: users.id });
-    await setSession(user.id);
-    return { ok: true as const };
+    await getDb().insert(users).values({
+      username: parsed.data.username,
+      usernameNormalized: normalized,
+      passwordHash,
+      status: "pending",
+      bilibiliUid: parsed.data.bilibiliUid,
+      bilibiliVerificationCode: verificationCode,
+    });
+    return { ok: true as const, bilibiliUid: parsed.data.bilibiliUid, verificationCode };
   } catch (error) {
     if (String(error).includes("username_normalized")) return { ok: false as const, error: "这个用户名已经被使用" };
+    if (String(error).includes("bilibili_uid")) return { ok: false as const, error: "这个 B 站 UID 已绑定其他账号" };
     throw error;
   }
 }
@@ -42,9 +50,11 @@ export async function login(username: string, password: string) {
   const parsed = authSchema.safeParse({ username, password });
   if (!parsed.success) return { ok: false as const, error: "用户名或密码错误" };
   const [user] = await getDb().select().from(users).where(eq(users.usernameNormalized, normalizeUsername(parsed.data.username))).limit(1);
-  if (!user || user.status !== "active" || !(await compare(parsed.data.password, user.passwordHash))) {
+  if (!user || !(await compare(parsed.data.password, user.passwordHash))) {
     return { ok: false as const, error: "用户名或密码错误" };
   }
+  if (user.status === "pending") return { ok: false as const, error: "B 站 UID 还在等待神绮爱核验，请先完成主页签名验证" };
+  if (user.status !== "active") return { ok: false as const, error: "用户名或密码错误" };
   await setSession(user.id);
   return { ok: true as const };
 }

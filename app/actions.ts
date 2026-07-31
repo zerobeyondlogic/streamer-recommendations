@@ -8,12 +8,12 @@ import { getDb } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
 import {
-  createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreSubmission, saveHostReply, setPinned, softDelete, updateContentStatus, updateSettings,
+  approveBilibiliUser, createHostRecommendation, createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreSubmission, saveHostReply, setPinned, softDelete, updateContentStatus, updateScore, updateSettings,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
-import { contrastRatio, hostUpdateSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, scoreSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { contentStatuses } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
@@ -35,10 +35,10 @@ export async function registerAction(form: FormData) {
   const limit = consumeRateLimit(await clientKey("register"), 5, 60 * 60_000);
   if (!limit.ok) go("/register", `操作太频繁，请 ${limit.retryAfter} 秒后再试`);
   try {
-    const result = await register(value(form, "username"), value(form, "password"));
+    const result = await register(value(form, "username"), value(form, "password"), value(form, "bilibiliUid"));
     if (!result.ok) go("/register", result.error);
+    redirect(`/verify-bilibili?uid=${encodeURIComponent(result.bilibiliUid)}&code=${encodeURIComponent(result.verificationCode)}`);
   } catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) go("/register", "数据库尚未配置，请先完成部署设置"); throw error; }
-  redirect("/submit");
 }
 
 export async function loginAction(form: FormData) {
@@ -67,14 +67,30 @@ export async function submitAction(form: FormData) {
   if (!parsed.success) go("/submit", parsed.error.issues[0]?.message ?? "投稿内容有误");
   await createSubmission(user.id, parsed.data);
   revalidatePath("/me/submissions");
-  go("/me/submissions", "投稿已送达主播收件箱", "success");
+  go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
+}
+
+export async function createHostRecommendationAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const parsed = hostRecommendationSchema.safeParse({
+    category: value(form, "category"), title: value(form, "title"), description: value(form, "description"),
+    externalUrl: value(form, "externalUrl"), contentStatus: value(form, "contentStatus"), score: value(form, "score"),
+    experience: value(form, "experience"), pin: form.get("pin") === "on", pinNote: value(form, "pinNote"),
+  });
+  if (!parsed.success) go("/host/recommend", parsed.error.issues[0]?.message ?? "推荐内容有误");
+  let row: Awaited<ReturnType<typeof createHostRecommendation>>;
+  try { row = await createHostRecommendation(host.id, parsed.data); }
+  catch (error) { go("/host/recommend", error instanceof Error ? error.message : "发布失败"); }
+  revalidatePath("/"); revalidatePath("/host/library");
+  go(`/host/submission/${row.id}`, "神绮爱原创推荐已直接公开", "success");
 }
 
 export async function deleteOwnSubmissionAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const ok = await deleteOwnUnreadSubmission(user.id, value(form, "submissionId"));
   revalidatePath("/me/submissions");
-  if (!ok) go("/me/submissions", "只有主播尚未查看的投稿可以撤回");
+  if (!ok) go("/me/submissions", "只有神绮爱尚未查看的投稿可以撤回");
   go("/me/submissions", "投稿已撤回", "success");
 }
 
@@ -100,6 +116,23 @@ export async function statusAction(form: FormData) {
   revalidatePath("/"); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", "作品状态已更新", "success");
 }
 
+export async function scoreAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  const parsed = scoreSchema.safeParse(value(form, "score"));
+  const returnTo = value(form, "returnTo") || "/host/library";
+  if (!parsed.success) go(returnTo, "评分必须是 1～10 的整数");
+  try { await updateScore(host.id, value(form, "submissionId"), parsed.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "评分失败"); }
+  revalidatePath("/"); revalidatePath("/host/library"); go(returnTo, parsed.data ? `已评分 ${parsed.data}/10` : "已清除评分", "success");
+}
+
+export async function approveBilibiliUserAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  try { await approveBilibiliUser(host.id, value(form, "userId")); }
+  catch (error) { go("/host/users", error instanceof Error ? error.message : "核验失败"); }
+  revalidatePath("/host/users"); go("/host/users", "B 站 UID 已核验，用户现在可以登录投稿", "success");
+}
+
 export async function pinAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const parsed = hostUpdateSchema.safeParse({ submissionId: value(form, "submissionId"), pinNote: value(form, "pinNote") });
   if (!parsed.success) go("/host/library", "置顶信息无效");
@@ -114,7 +147,7 @@ export async function replyAction(form: FormData) {
   });
   if (!parsed.success || !parsed.data.reply) go(`/host/submission/${value(form, "submissionId")}`, parsed.error?.issues[0]?.message ?? "请填写感想");
   await saveHostReply(host.id, parsed.data.submissionId, parsed.data.reply, parsed.data.republish, parsed.data.notifyAgain);
-  revalidatePath("/"); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "主播感想已保存", "success");
+  revalidatePath("/"); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "神绮爱感想已保存", "success");
 }
 
 export async function themeAction(form: FormData) {

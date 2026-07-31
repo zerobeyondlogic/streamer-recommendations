@@ -5,11 +5,12 @@ import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings, unreadNotificationCount } from "@/lib/data";
 import { logoutAction } from "./actions";
+import { categoryLabels, primaryCategories } from "@/lib/config";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const h=await headers(); const host=h.get("x-forwarded-host")??h.get("host")??"localhost:3000"; const protocol=h.get("x-forwarded-proto")??(host.startsWith("localhost")?"http":"https");
-  return { metadataBase:new URL(`${protocol}://${host}`), title:{default:"主播的作品放映室",template:"%s · 主播的作品放映室"}, description:"向主播推荐书籍、漫画、电影、番剧和游戏，一起记录每次快乐相遇。", openGraph:{title:"主播的作品放映室",description:"把你喜欢的作品，轻轻放进我的收件箱",images:[{url:"/og.png",width:1200,height:630,alt:"主播的作品放映室"}]}, twitter:{card:"summary_large_image",images:["/og.png"]} };
+  return { metadataBase:new URL(`${protocol}://${host}`), title:{default:"神绮爱的作品放映室",template:"%s · 神绮爱的作品放映室"}, description:"向神绮爱推荐书籍、漫画、电影、动漫和游戏。", openGraph:{title:"神绮爱的作品放映室",description:"把喜欢的作品推荐给神绮爱",images:[{url:"/og.png",width:1200,height:630,alt:"神绮爱的作品放映室"}]}, twitter:{card:"summary_large_image",images:["/og.png"]} };
 }
 
 export const dynamic = "force-dynamic";
@@ -30,15 +31,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">
           <nav className="nav-shell" aria-label="主导航">
-            <Link href="/" className="brand"><span className="brand-mark">✦</span><span>{settings.siteName}</span></Link>
-            <div className="nav-links">
-              <Link href="/">时间流</Link>
+            <div className="nav-top"><Link href="/" className="brand"><span className="brand-mark">✦</span><span>{settings.siteName}</span></Link>
+            <div className="nav-links account-links">
               {user ? <Link href="/submit">去投稿</Link> : null}
               {user ? <Link href="/me/submissions">我的投稿</Link> : null}
               {user ? <Link href="/me/notifications" className="notification-link">消息{unread > 0 ? <span className="badge">{unread > 99 ? "99+" : unread}</span> : null}</Link> : null}
-              {user?.role === "host" ? <Link href="/host">主播工作台</Link> : null}
+              {user?.role === "host" ? <Link href="/host">神绮爱工作台</Link> : null}
               {user ? <form action={logoutAction}><button className="link-button" type="submit">退出</button></form> : <><Link href="/login">登录</Link><Link href="/register" className="nav-cta">注册</Link></>}
-            </div>
+            </div></div>
+            <div className="category-nav" aria-label="作品分类"><Link href="/">首页</Link>{primaryCategories.map((category) => <Link href={`/?category=${category}`} key={category}>{categoryLabels[category]}</Link>)}</div>
           </nav>
         </header>
         <main>{children}</main>
