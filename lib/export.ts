@@ -3,7 +3,7 @@ import { activityLogs, hostReplies, notifications, siteSettings, submissions, us
 import { safeSpreadsheetCell, sha256 } from "./security";
 import type { Cell, Sheet, SheetData } from "write-excel-file/node";
 
-export const SCHEMA_VERSION = "1";
+export const SCHEMA_VERSION = "2";
 const isoDate = () => new Date().toISOString().slice(0, 10);
 const json = (value: unknown) => Buffer.from(JSON.stringify(value, null, 2));
 
@@ -23,9 +23,9 @@ export async function createXlsxExport() {
     const data:SheetData=[header,...rows.map(row=>row.map(excelCell))];
     sheets.push({sheet:name,data,stickyRowsCount:1,showGridLines:true,columns:columns.map(()=>({width:22}))});
   };
-  add("投稿", ["投稿 ID","分类","作品名称","推荐介绍","相关链接","投稿用户名","是否匿名展示","投稿时间","主播查看时间","首次公开时间","首页最后活跃时间","作品状态","作品完成时间","是否置顶","置顶时间","置顶推荐语","主播感想","感想发布时间","是否删除","删除时间"], submissionRows.map((s) => { const r=replyMap.get(s.id); return [s.id,s.category,s.title,s.description,s.externalUrl,usernames.get(s.userId),s.anonymousPublic,s.createdAt,s.hostReadAt,s.publishedAt,s.feedActivityAt,s.contentStatus,s.contentCompletedAt,!!s.pinnedAt,s.pinnedAt,s.pinNote,r?.content,r?.publishedAt,!!s.deletedAt,s.deletedAt]; }));
+  add("投稿", ["投稿 ID","来源","分类","作品名称","推荐介绍","相关链接","投稿用户名","是否匿名展示","投稿时间","主播查看时间","首次公开时间","首页最后活跃时间","作品状态","作品完成时间","主播评分","是否置顶","置顶时间","置顶推荐语","主播感想","感想发布时间","是否删除","删除时间"], submissionRows.map((s) => { const r=replyMap.get(s.id); return [s.id,s.source,s.category,s.title,s.description,s.externalUrl,usernames.get(s.userId),s.anonymousPublic,s.createdAt,s.hostReadAt,s.publishedAt,s.feedActivityAt,s.contentStatus,s.contentCompletedAt,s.score,!!s.pinnedAt,s.pinnedAt,s.pinNote,r?.content,r?.publishedAt,!!s.deletedAt,s.deletedAt]; }));
   const submissionCounts = new Map<string, number>(); submissionRows.forEach((s) => submissionCounts.set(s.userId, (submissionCounts.get(s.userId)??0)+1));
-  add("用户", ["用户 ID","用户名","角色","状态","注册时间","投稿数量"], userRows.map((u) => [u.id,u.username,u.role,u.status,u.createdAt,submissionCounts.get(u.id)??0]));
+  add("用户", ["用户 ID","用户名","B站 UID","UID 已核验","角色","状态","注册时间","投稿数量"], userRows.map((u) => [u.id,u.username,u.bilibiliUid,!!u.bilibiliVerifiedAt,u.role,u.status,u.createdAt,submissionCounts.get(u.id)??0]));
   add("通知", ["通知 ID","接收用户 ID","类型","投稿 ID","是否已读","创建时间"], notificationRows.map((n) => [n.id,n.userId,n.type,n.submissionId,!!n.readAt,n.createdAt]));
   add("主题设置", ["网站名称","网站副标题","背景类型","背景地址","主色","辅助色","强调色","页面背景色","卡片透明度","遮罩强度","更新时间"], settingsRows.map((s) => [s.siteName,s.siteTagline,s.backgroundType,s.backgroundImageUrl,s.primaryColor,s.secondaryColor,s.accentColor,s.backgroundColor,s.cardOpacity,s.backgroundOverlay,s.updatedAt]));
   const bytes = await writeExcelFile(sheets).toBuffer();

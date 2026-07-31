@@ -8,6 +8,13 @@
       "when": 1785516505750,
       "tag": "0000_sudden_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785519113571,
+      "tag": "0001_flowery_ben_grimm",
+      "breakpoints": true
     }
   ]
 }

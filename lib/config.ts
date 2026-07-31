@@ -7,8 +7,12 @@ export type Category = (typeof categories)[number];
 export type ContentStatus = (typeof contentStatuses)[number];
 
 export const categoryLabels: Record<Category, string> = {
-  book: "书籍", manga: "漫画", movie: "电影", anime: "番剧", game: "游戏", other: "其他",
+  book: "书籍", manga: "漫画", movie: "电影", anime: "动漫", game: "游戏", other: "其他",
 };
+
+export const primaryCategories = categories.filter((category) => category !== "other");
+export const feedSorts = ["time", "score"] as const;
+export type FeedSort = (typeof feedSorts)[number];
 
 const labels = {
   reading: { pending: "未读", in_progress: "阅读中", completed: "已读", dropped: "弃读" },

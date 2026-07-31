@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings, unreadNotificationCount } from "@/lib/data";
 import { logoutAction } from "./actions";
+import { categoryLabels, primaryCategories } from "@/lib/config";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,15 +31,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">
           <nav className="nav-shell" aria-label="主导航">
-            <Link href="/" className="brand"><span className="brand-mark">✦</span><span>{settings.siteName}</span></Link>
-            <div className="nav-links">
-              <Link href="/">时间流</Link>
+            <div className="nav-top"><Link href="/" className="brand"><span className="brand-mark">✦</span><span>{settings.siteName}</span></Link>
+            <div className="nav-links account-links">
               {user ? <Link href="/submit">去投稿</Link> : null}
               {user ? <Link href="/me/submissions">我的投稿</Link> : null}
               {user ? <Link href="/me/notifications" className="notification-link">消息{unread > 0 ? <span className="badge">{unread > 99 ? "99+" : unread}</span> : null}</Link> : null}
               {user?.role === "host" ? <Link href="/host">主播工作台</Link> : null}
               {user ? <form action={logoutAction}><button className="link-button" type="submit">退出</button></form> : <><Link href="/login">登录</Link><Link href="/register" className="nav-cta">注册</Link></>}
-            </div>
+            </div></div>
+            <div className="category-nav" aria-label="作品分类"><Link href="/">首页</Link>{primaryCategories.map((category) => <Link href={`/?category=${category}`} key={category}>{categoryLabels[category]}</Link>)}</div>
           </nav>
         </header>
         <main>{children}</main>

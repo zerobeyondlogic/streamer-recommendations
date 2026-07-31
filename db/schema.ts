@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   numeric,
   pgTable,
@@ -21,13 +22,18 @@ export const users = pgTable("users", {
   usernameNormalized: text("username_normalized").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["user", "host"] }).notNull().default("user"),
-  status: text("status", { enum: ["active", "banned"] }).notNull().default("active"),
+  status: text("status", { enum: ["pending", "active", "banned"] }).notNull().default("pending"),
+  bilibiliUid: text("bilibili_uid"),
+  bilibiliVerificationCode: text("bilibili_verification_code"),
+  bilibiliVerifiedAt: timestamp("bilibili_verified_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
   uniqueIndex("users_username_normalized_uidx").on(table.usernameNormalized),
+  uniqueIndex("users_bilibili_uid_uidx").on(table.bilibiliUid).where(sql`${table.bilibiliUid} is not null`),
   check("users_role_check", sql`${table.role} in ('user', 'host')`),
-  check("users_status_check", sql`${table.status} in ('active', 'banned')`),
+  check("users_status_check", sql`${table.status} in ('pending', 'active', 'banned')`),
+  check("users_bilibili_uid_check", sql`${table.bilibiliUid} is null or ${table.bilibiliUid} ~ '^[1-9][0-9]{0,19}$'`),
 ]);
 
 export const sessions = pgTable("sessions", {
@@ -44,6 +50,7 @@ export const sessions = pgTable("sessions", {
 export const submissions = pgTable("submissions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  source: text("source", { enum: ["user", "host"] }).notNull().default("user"),
   category: text("category", { enum: ["book", "manga", "movie", "anime", "game", "other"] }).notNull(),
   title: text("title").notNull(),
   normalizedTitle: text("normalized_title").notNull(),
@@ -55,6 +62,7 @@ export const submissions = pgTable("submissions", {
   feedActivityAt: timestamp("feed_activity_at", { withTimezone: true }),
   contentStatus: text("content_status", { enum: ["pending", "in_progress", "completed", "dropped"] }).notNull().default("pending"),
   contentCompletedAt: timestamp("content_completed_at", { withTimezone: true }),
+  score: integer("score"),
   pinnedAt: timestamp("pinned_at", { withTimezone: true }),
   pinnedBy: uuid("pinned_by").references(() => users.id, { onDelete: "set null" }),
   pinNote: text("pin_note"),
@@ -65,12 +73,15 @@ export const submissions = pgTable("submissions", {
 }, (table) => [
   check("submissions_category_check", sql`${table.category} in ('book','manga','movie','anime','game','other')`),
   check("submissions_status_check", sql`${table.contentStatus} in ('pending','in_progress','completed','dropped')`),
+  check("submissions_source_check", sql`${table.source} in ('user','host')`),
+  check("submissions_score_check", sql`${table.score} is null or (${table.score} between 1 and 10 and ${table.contentStatus} = 'completed')`),
   check("submissions_title_length_check", sql`char_length(${table.title}) between 1 and 100`),
   check("submissions_description_length_check", sql`${table.description} is null or char_length(${table.description}) <= 1000`),
   index("submissions_public_feed_idx").on(table.pinnedAt, table.feedActivityAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
   index("submissions_user_idx").on(table.userId, table.createdAt),
   index("submissions_inbox_idx").on(table.hostReadAt, table.createdAt).where(sql`${table.deletedAt} is null`),
   index("submissions_library_idx").on(table.contentStatus, table.category, table.feedActivityAt).where(sql`${table.deletedAt} is null`),
+  index("submissions_score_idx").on(table.pinnedAt, table.score, table.feedActivityAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
 ]);
 
 export const hostReplies = pgTable("host_replies", {

@@ -8,12 +8,12 @@ import { getDb } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
 import {
-  createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreSubmission, saveHostReply, setPinned, softDelete, updateContentStatus, updateSettings,
+  approveBilibiliUser, createHostRecommendation, createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreSubmission, saveHostReply, setPinned, softDelete, updateContentStatus, updateScore, updateSettings,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
-import { contrastRatio, hostUpdateSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, scoreSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { contentStatuses } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
@@ -35,10 +35,10 @@ export async function registerAction(form: FormData) {
   const limit = consumeRateLimit(await clientKey("register"), 5, 60 * 60_000);
   if (!limit.ok) go("/register", `操作太频繁，请 ${limit.retryAfter} 秒后再试`);
   try {
-    const result = await register(value(form, "username"), value(form, "password"));
+    const result = await register(value(form, "username"), value(form, "password"), value(form, "bilibiliUid"));
     if (!result.ok) go("/register", result.error);
+    redirect(`/verify-bilibili?uid=${encodeURIComponent(result.bilibiliUid)}&code=${encodeURIComponent(result.verificationCode)}`);
   } catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) go("/register", "数据库尚未配置，请先完成部署设置"); throw error; }
-  redirect("/submit");
 }
 
 export async function loginAction(form: FormData) {
@@ -70,6 +70,22 @@ export async function submitAction(form: FormData) {
   go("/me/submissions", "投稿已送达主播收件箱", "success");
 }
 
+export async function createHostRecommendationAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const parsed = hostRecommendationSchema.safeParse({
+    category: value(form, "category"), title: value(form, "title"), description: value(form, "description"),
+    externalUrl: value(form, "externalUrl"), contentStatus: value(form, "contentStatus"), score: value(form, "score"),
+    experience: value(form, "experience"), pin: form.get("pin") === "on", pinNote: value(form, "pinNote"),
+  });
+  if (!parsed.success) go("/host/recommend", parsed.error.issues[0]?.message ?? "推荐内容有误");
+  let row: Awaited<ReturnType<typeof createHostRecommendation>>;
+  try { row = await createHostRecommendation(host.id, parsed.data); }
+  catch (error) { go("/host/recommend", error instanceof Error ? error.message : "发布失败"); }
+  revalidatePath("/"); revalidatePath("/host/library");
+  go(`/host/submission/${row.id}`, "主播原创推荐已直接公开", "success");
+}
+
 export async function deleteOwnSubmissionAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const ok = await deleteOwnUnreadSubmission(user.id, value(form, "submissionId"));
@@ -98,6 +114,23 @@ export async function statusAction(form: FormData) {
   if (!contentStatuses.includes(status as never)) go(value(form, "returnTo") || "/host/library", "作品状态无效");
   await updateContentStatus(host.id, value(form, "submissionId"), status as (typeof contentStatuses)[number]);
   revalidatePath("/"); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", "作品状态已更新", "success");
+}
+
+export async function scoreAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  const parsed = scoreSchema.safeParse(value(form, "score"));
+  const returnTo = value(form, "returnTo") || "/host/library";
+  if (!parsed.success) go(returnTo, "评分必须是 1～10 的整数");
+  try { await updateScore(host.id, value(form, "submissionId"), parsed.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "评分失败"); }
+  revalidatePath("/"); revalidatePath("/host/library"); go(returnTo, parsed.data ? `已评分 ${parsed.data}/10` : "已清除评分", "success");
+}
+
+export async function approveBilibiliUserAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  try { await approveBilibiliUser(host.id, value(form, "userId")); }
+  catch (error) { go("/host/users", error instanceof Error ? error.message : "核验失败"); }
+  revalidatePath("/host/users"); go("/host/users", "B 站 UID 已核验，用户现在可以登录投稿", "success");
 }
 
 export async function pinAction(form: FormData) {
