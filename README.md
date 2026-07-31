@@ -20,7 +20,7 @@
 - Node.js Runtime，服务端组件、Server Actions 与 Route Handlers
 - Neon PostgreSQL、Drizzle ORM 和版本化 migrations
 - bcryptjs 密码哈希；随机 Session Token，数据库只保存 SHA-256 哈希
-- ExcelJS、JSZip、可选 `@vercel/blob`
+- write-excel-file、JSZip、可选 `@vercel/blob`
 - Vercel 部署；浏览器只访问同域，数据库连接串永不进入客户端
 
 ## 目录结构
