@@ -23,7 +23,7 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
   const requestedReviewPage = safePageNumber(messages.reviewPage);
   const detail = await getPublicSubmissionDetail(id.data, user?.id, requestedReviewPage);
   if (!detail) notFound();
-  const { item, reviews, ownReview, reviewPage, reviewHasMore } = detail;
+  const { item, isAuthor, reviews, ownReview, reviewPage, reviewHasMore } = detail;
   const isHostRecommended = item.source === "host" || !!item.pinnedAt;
   const kind = submissionKind(item.category);
   const backPath = kind === "food" ? "/food#feed" : kind === "wish" ? "/wishes#feed" : "/#feed";
@@ -40,6 +40,7 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
       {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
       {item.pinNote ? <div className="pin-note"><strong>{kind === "wish" ? "预定说明" : "神绮爱推荐语"}</strong><BvText>{item.pinNote}</BvText></div> : null}
       {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>{kind === "wish" ? "神绮爱回应" : kind === "food" ? "神绮爱试吃感想" : "神绮爱感想"}</strong></div><p><BvText>{item.reply}</BvText></p><time>记录于 {formatDate(item.replyPublishedAt)}</time></div> : null}
+      {isAuthor ? <Link className="button small ghost author-edit-link" href={`/me/submissions#submission-${item.id}`}><Pencil aria-hidden="true"/>编辑我的内容</Link> : null}
     </article>
 
     <section className="community-review-summary panel" aria-labelledby="community-review-title">

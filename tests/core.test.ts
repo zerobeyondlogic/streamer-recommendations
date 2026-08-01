@@ -2,8 +2,9 @@ import { describe,expect,it } from "vitest";
 import { contentStatusLabel, submissionKind } from "../lib/config";
 import { isAllowedBackgroundUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
 import { clearRateLimitsForTests,consumeRateLimit } from "../lib/rate-limit";
-import { colorSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
+import { accountPasswordSchema,accountUsernameSchema,colorSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
+import { themePresetIds,themePresets } from "../lib/themes";
 import { tokenizeBvText } from "../lib/bilibili";
 import { parseSpoilerText,recommendationScore } from "../lib/spoilers";
 
@@ -12,14 +13,17 @@ describe("账号与输入安全",()=>{
   it("作品名规范化空格",()=>expect(normalizeTitle("  星   海  ")).toBe("星 海"));
   it("只允许 http/https 投稿链接",()=>{expect(submissionSchema.safeParse({category:"book",title:"书",externalUrl:"javascript:alert(1)",anonymousPublic:false}).success).toBe(false);expect(submissionSchema.safeParse({category:"book",title:"书",externalUrl:"https://example.com",anonymousPublic:false}).success).toBe(true)});
   it("拒绝非法颜色",()=>expect(colorSchema.safeParse("red").success).toBe(false));
-  it("拒绝明显越界的主题透明度",()=>expect(themeSchema.safeParse({siteName:"站",siteTagline:"",backgroundType:"built_in",backgroundImageUrl:"",primaryColor:"#7259d9",secondaryColor:"#ff9f76",accentColor:"#f4c95d",backgroundColor:"#fff9f2",cardOpacity:.2,backgroundOverlay:.3}).success).toBe(false));
+  it("拒绝明显越界的主题透明度",()=>expect(themeSchema.safeParse({backgroundType:"built_in",backgroundImageUrl:"builtin:warm",primaryColor:"#7259d9",secondaryColor:"#ff9f76",accentColor:"#f4c95d",backgroundColor:"#fff9f2",cardOpacity:.2,backgroundOverlay:.3}).success).toBe(false));
+  it.each(themePresetIds)("内置主题 %s 可被完整保存",(id)=>expect(themeSchema.safeParse({backgroundType:"built_in",...themePresets[id]}).success).toBe(true));
+  it("修改用户名必须提供有效用户名与当前密码",()=>{expect(accountUsernameSchema.safeParse({username:"新名字",currentPassword:"current-pass"}).success).toBe(true);expect(accountUsernameSchema.safeParse({username:"a",currentPassword:"current-pass"}).success).toBe(false)});
+  it("修改密码拒绝确认不一致和重复使用当前密码",()=>{expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"new-password",confirmPassword:"new-password"}).success).toBe(true);expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"new-password",confirmPassword:"wrong-password"}).success).toBe(false);expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"current-pass",confirmPassword:"current-pass"}).success).toBe(false)});
   it("自定义背景只接受本站 Vercel Blob",()=>{expect(isAllowedBackgroundUrl("https://store.public.blob.vercel-storage.com/background.png")).toBe(true);expect(isAllowedBackgroundUrl("https://example.com/background.png")).toBe(false)});
   it("分页参数限制为有限范围",()=>{expect(safePageNumber("2.9")).toBe(2);expect(safePageNumber("Infinity")).toBe(1);expect(safePageNumber("999999")).toBe(500)});
   it("重定向只允许本站路径",()=>{expect(safeLocalPath("/host/library?status=pending")).toBe("/host/library?status=pending");expect(safeLocalPath("//evil.example")).toBe("/");expect(safeLocalPath("https://evil.example")).toBe("/")});
   it("实例限流器会阻止窗口内的超额请求",()=>{clearRateLimitsForTests();expect(consumeRateLimit("login:test",1,60_000).ok).toBe(true);expect(consumeRateLimit("login:test",1,60_000).ok).toBe(false)});
   it("棉花糖默认私密并拒绝空内容",()=>{expect(marshmallowSchema.parse({content:"  想说的话  "})).toEqual({content:"想说的话",allowPublic:false});expect(marshmallowSchema.safeParse({content:"   "}).success).toBe(false)});
   it("美食家和许愿箱沿用安全的统一投稿格式",()=>{expect(submissionSchema.safeParse({category:"food",title:"小馆招牌面",description:"很好吃",externalUrl:"",anonymousPublic:false}).success).toBe(true);expect(submissionSchema.safeParse({category:"wish",title:"许愿台词回读",description:"",externalUrl:"",anonymousPublic:false}).success).toBe(true)});
-  it("页面主要文案有长度限制且必填标题不能为空",()=>expect(siteCopySchema.safeParse({recommendationHeroTitle:"",recommendationHeroAccent:"推荐给神绮爱。",recommendationSectionTitle:"推荐",foodHeroTitle:"必吃",foodTagline:"",foodSectionTitle:"美食",wishHeroTitle:"许愿",wishTagline:"",wishSectionTitle:"愿望",marshmallowHeroTitle:"棉花糖",marshmallowTagline:"",marshmallowSectionTitle:"上墙"}).success).toBe(false));
+  it("页面主要文案有长度限制且必填标题不能为空",()=>expect(siteCopySchema.safeParse({siteName:"站点",siteTagline:"说明",recommendationHeroTitle:"",recommendationHeroAccent:"推荐给神绮爱。",recommendationTagline:"副标题",recommendationSectionTitle:"推荐",foodHeroTitle:"必吃",foodTagline:"",foodSectionTitle:"美食",wishHeroTitle:"许愿",wishTagline:"",wishSectionTitle:"愿望",marshmallowHeroTitle:"棉花糖",marshmallowTagline:"",marshmallowSectionTitle:"上墙"}).success).toBe(false));
 });
 
 describe("匿名、状态和导出规则",()=>{

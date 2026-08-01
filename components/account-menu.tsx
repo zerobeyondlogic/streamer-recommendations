@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ClipboardList, LayoutDashboard, LogOut, Send, Sparkles, X } from "lucide-react";
+import { ChevronDown, ClipboardList, LayoutDashboard, LogOut, Send, Settings, Sparkles, X } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 
 export function AccountMenu({ isHost }: { isHost: boolean }) {
@@ -42,8 +42,9 @@ export function AccountMenu({ isHost }: { isHost: boolean }) {
       <ChevronDown className="account-menu-chevron" aria-hidden="true"/>
     </button>
     {open ? <div className="account-menu-panel" id="account-menu-panel" aria-label="账户菜单">
-      <Link href="/submit" onClick={() => setOpen(false)}><Send aria-hidden="true"/><span>去投稿</span></Link>
+      <Link href={isHost ? "/host/recommend" : "/submit"} onClick={() => setOpen(false)}><Send aria-hidden="true"/><span>{isHost ? "新建内容" : "去投稿"}</span></Link>
       <Link href="/me/submissions" onClick={() => setOpen(false)}><ClipboardList aria-hidden="true"/><span>我的投稿</span></Link>
+      <Link href="/me/account" onClick={() => setOpen(false)}><Settings aria-hidden="true"/><span>账号设置</span></Link>
       {isHost ? <Link href="/host" onClick={() => setOpen(false)}><LayoutDashboard aria-hidden="true"/><span>工作台</span></Link> : null}
       <form action={logoutAction}><button type="submit"><LogOut aria-hidden="true"/><span>退出</span></button></form>
     </div> : null}

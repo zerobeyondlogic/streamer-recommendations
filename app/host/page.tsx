@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Bell, Check, Cloud, Inbox, Pin, Play, Timer } from "lucide-react";
 import { getHostStats } from "@/lib/data";
-export const metadata: Metadata = { title: "神绮爱工作台" };
+export const metadata: Metadata = { title: "工作台" };
 export default async function HostDashboard() {
   const [newCount,pending,progress,completed,pinned,unread,marshmallowCount] = await getHostStats();
   const stats=[
@@ -14,5 +14,5 @@ export default async function HostDashboard() {
     {label:'当前置顶',value:pinned,href:'/host/library?pinned=1',Icon:Pin},
     {label:'未读通知',value:unread,href:'/host',Icon:Bell},
   ];
-  return <><header className="host-heading"><div><span className="eyebrow">今日概览</span><h1>神绮爱工作台</h1><p>管理投稿、棉花糖与推荐。</p></div><div className="hero-actions"><Link className="button ghost" href="/host/inbox">处理投稿</Link><Link className="button primary" href="/host/recommend">写推荐</Link></div></header><div className="stats-grid">{stats.map(({label,value,href,Icon})=><Link className="stat-card" href={href} key={label}><span><Icon aria-hidden="true"/></span><strong>{value}</strong><small>{label}</small></Link>)}</div></>;
+  return <><header className="host-heading"><div><span className="eyebrow">今日概览</span><h1>工作台</h1><p>先处理待办，再管理已公开内容。</p></div><div className="hero-actions"><Link className="button ghost" href="/host/inbox">处理投稿</Link><Link className="button primary" href="/host/recommend">新建内容</Link></div></header><div className="stats-grid">{stats.map(({label,value,href,Icon})=><Link className="stat-card" href={href} key={label}><span><Icon aria-hidden="true"/></span><strong>{value}</strong><small>{label}</small></Link>)}</div></>;
 }

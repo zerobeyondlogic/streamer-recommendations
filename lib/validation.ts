@@ -2,6 +2,7 @@ import { z } from "zod";
 import { categories, contentStatuses } from "./config";
 import { isAllowedBackgroundUrl } from "./security";
 import { hasBalancedSpoilers } from "./spoilers";
+import { builtInThemeValues } from "./themes";
 
 const text = (max: number) => z.string().trim().max(max);
 export const usernameSchema = z.string().trim().min(2, "用户名至少 2 个字符").max(32, "用户名最多 32 个字符").regex(/^[\p{L}\p{N}_-]+$/u, "用户名只能包含文字、数字、下划线和短横线");
@@ -13,6 +14,18 @@ export const changePasswordSchema = z.object({
   password: passwordSchema,
   confirmPassword: z.string(),
 }).refine((value) => value.password === value.confirmPassword, { message: "两次输入的密码不一致", path: ["confirmPassword"] });
+
+export const accountUsernameSchema = z.object({
+  username: usernameSchema,
+  currentPassword: passwordSchema,
+});
+
+export const accountPasswordSchema = z.object({
+  currentPassword: passwordSchema,
+  password: passwordSchema,
+  confirmPassword: z.string(),
+}).refine((value) => value.password === value.confirmPassword, { message: "两次输入的新密码不一致", path: ["confirmPassword"] })
+  .refine((value) => value.password !== value.currentPassword, { message: "新密码不能与当前密码相同", path: ["password"] });
 
 export const submissionSchema = z.object({
   category: z.enum(categories),
@@ -35,12 +48,10 @@ export const submissionReviewSchema = z.object({
 
 export const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "请使用 6 位十六进制颜色");
 export const themeSchema = z.object({
-  siteName: text(50).min(1),
-  siteTagline: text(120),
   backgroundType: z.enum(["built_in", "custom"]),
   backgroundImageUrl: z.union([
     z.literal(""),
-    z.enum(["builtin:warm", "builtin:stars", "builtin:bubbles"]),
+    z.enum(builtInThemeValues),
     z.url().refine(isAllowedBackgroundUrl, "自定义背景必须来自本站的 Vercel Blob"),
   ]).optional().transform((v) => v || null),
   primaryColor: colorSchema,
@@ -52,7 +63,8 @@ export const themeSchema = z.object({
 });
 
 export const siteCopySchema = z.object({
-  recommendationHeroTitle: text(80).min(1), recommendationHeroAccent: text(80).min(1), recommendationSectionTitle: text(80).min(1),
+  siteName: text(50).min(1), siteTagline: text(120),
+  recommendationHeroTitle: text(80).min(1), recommendationHeroAccent: text(80).min(1), recommendationTagline: text(180), recommendationSectionTitle: text(80).min(1),
   foodHeroTitle: text(100).min(1), foodTagline: text(180), foodSectionTitle: text(80).min(1),
   wishHeroTitle: text(100).min(1), wishTagline: text(180), wishSectionTitle: text(80).min(1),
   marshmallowHeroTitle: text(100).min(1), marshmallowTagline: text(180), marshmallowSectionTitle: text(80).min(1),

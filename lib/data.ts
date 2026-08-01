@@ -2,19 +2,19 @@ import "server-only";
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { cache } from "react";
 import { getDb } from "@/db";
-import { activityLogs, hostReplies, marshmallows, notifications, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
-import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
+import { activityLogs, hostReplies, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { MAX_PINNED_SUBMISSIONS, submissionKind, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
 import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects } from "./transitions";
 
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
-  backgroundType: "built_in" as const, backgroundImageUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
+  backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
 export const defaultSiteCopy = {
-  id: "default", recommendationHeroTitle: "把喜欢的作品，", recommendationHeroAccent: "推荐给神绮爱。", recommendationSectionTitle: "最近的作品推荐",
+  id: "default", recommendationHeroTitle: "把喜欢的作品，", recommendationHeroAccent: "推荐给神绮爱。", recommendationTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。", recommendationSectionTitle: "最近的作品推荐",
   foodHeroTitle: "好吃的，当然要一起分享。", foodTagline: "推荐值得一吃的店铺、菜品和味道。", foodSectionTitle: "大家的美食推荐",
   wishHeroTitle: "下一次直播，想和神绮爱做什么？", wishTagline: "许愿台词回读、一起看作品，或任何直播企划。", wishSectionTitle: "等待实现的愿望",
   marshmallowHeroTitle: "给神绮爱一颗棉花糖", marshmallowTagline: "写下想说的话，默认仅神绮爱可见。", marshmallowSectionTitle: "已上墙的棉花糖",
@@ -80,7 +80,7 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
   const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
   const commentCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.comment} is not null)`;
   const [item] = await getDb().select({
-    id: submissions.id, category: submissions.category, title: submissions.title, description: submissions.description,
+    id: submissions.id, userId: submissions.userId, category: submissions.category, title: submissions.title, description: submissions.description,
     externalUrl: submissions.externalUrl, anonymousPublic: submissions.anonymousPublic, username: users.username,
     createdAt: submissions.createdAt, publishedAt: submissions.publishedAt, feedActivityAt: submissions.feedActivityAt,
     contentStatus: submissions.contentStatus, pinnedAt: submissions.pinnedAt, pinNote: submissions.pinNote,
@@ -100,8 +100,8 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
     currentUserId ? getDb().select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment, updatedAt: submissionReviews.updatedAt })
       .from(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, currentUserId))).limit(1) : Promise.resolve([]),
   ]);
-  const { anonymousPublic, username, ...publicItem } = item;
-  return { item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) }, reviews: reviews.slice(0, 50), reviewPage, reviewHasMore: reviews.length > 50, ownReview: own[0] ?? null };
+  const { anonymousPublic, username, userId, ...publicItem } = item;
+  return { item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) }, isAuthor: currentUserId === userId, reviews: reviews.slice(0, 50), reviewPage, reviewHasMore: reviews.length > 50, ownReview: own[0] ?? null };
 }
 
 export async function saveSubmissionReview(userId: string, data: { submissionId: string; recommend: boolean; comment: string | null }) {
@@ -259,17 +259,45 @@ export async function createHostRecommendation(hostId: string, data: {
 
 export async function getMySubmissions(userId: string) {
   return getDb().select({
-    id: submissions.id, title: submissions.title, category: submissions.category, createdAt: submissions.createdAt,
+    id: submissions.id, title: submissions.title, category: submissions.category, description: submissions.description,
+    externalUrl: submissions.externalUrl, source: submissions.source, createdAt: submissions.createdAt,
     hostReadAt: submissions.hostReadAt, publishedAt: submissions.publishedAt, anonymousPublic: submissions.anonymousPublic,
-    contentStatus: submissions.contentStatus, score: submissions.score, deletedAt: submissions.deletedAt, reply: hostReplies.content,
+    contentStatus: submissions.contentStatus, score: submissions.score, reply: hostReplies.content,
     unread: sql<boolean>`exists(select 1 from ${notifications} n where n.submission_id = ${submissions.id} and n.user_id = ${userId} and n.read_at is null)`,
-  }).from(submissions).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id)).where(eq(submissions.userId, userId)).orderBy(desc(submissions.createdAt));
+  }).from(submissions).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
+    .where(and(eq(submissions.userId, userId), isNull(submissions.deletedAt))).orderBy(desc(submissions.createdAt));
+}
+
+export async function updateAuthoredSubmission(userId: string, submissionId: string, data: {
+  category: Category; title: string; description: string | null; externalUrl: string | null; anonymousPublic: boolean;
+}) {
+  await getDb().transaction(async (tx) => {
+    const [current] = await tx.select({ category: submissions.category, source: submissions.source }).from(submissions)
+      .where(and(eq(submissions.id, submissionId), eq(submissions.userId, userId), isNull(submissions.deletedAt))).limit(1);
+    if (!current) throw new Error("这条内容不存在，或你不是作者");
+    if (submissionKind(current.category) !== submissionKind(data.category)) throw new Error("不能把内容移动到另一个栏目");
+    await tx.update(submissions).set({
+      category: data.category,
+      title: data.title,
+      normalizedTitle: normalizeTitle(data.title),
+      description: data.description,
+      externalUrl: data.externalUrl,
+      anonymousPublic: current.source === "host" ? false : data.anonymousPublic,
+      updatedAt: new Date(),
+    }).where(eq(submissions.id, submissionId));
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_updated_by_author" });
+  });
 }
 
 export async function deleteOwnUnreadSubmission(userId: string, submissionId: string) {
-  const result = await getDb().update(submissions).set({ deletedAt: new Date(), deletedBy: userId, updatedAt: new Date() })
-    .where(and(eq(submissions.id, submissionId), eq(submissions.userId, userId), isNull(submissions.hostReadAt), isNull(submissions.deletedAt))).returning({ id: submissions.id });
-  return result.length === 1;
+  return getDb().transaction(async (tx) => {
+    const result = await tx.delete(submissions)
+      .where(and(eq(submissions.id, submissionId), eq(submissions.userId, userId), isNull(submissions.hostReadAt), isNull(submissions.deletedAt)))
+      .returning({ id: submissions.id });
+    if (!result.length) return false;
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: "submission_deleted_by_author", metadata: { submissionId } });
+    return true;
+  });
 }
 
 export async function getNotifications(userId: string, unreadOnly = false) {
@@ -315,7 +343,7 @@ export async function getHostSubmissions(filters: { id?:string; view?: "inbox" |
   if (filters.q) conditions.push(ilike(submissions.normalizedTitle, `%${normalizeTitle(filters.q)}%`));
   if (filters.pinned) conditions.push(isNotNull(submissions.pinnedAt));
   return getDb().select({
-    id: submissions.id, title: submissions.title, category: submissions.category, description: submissions.description,
+    id: submissions.id, userId: submissions.userId, title: submissions.title, category: submissions.category, description: submissions.description,
     externalUrl: submissions.externalUrl, username: users.username, anonymousPublic: submissions.anonymousPublic,
     hostReadAt: submissions.hostReadAt, publishedAt: submissions.publishedAt, contentStatus: submissions.contentStatus,
     source: submissions.source, score: submissions.score,
@@ -410,18 +438,21 @@ export async function getPendingBilibiliUsers() {
   }).from(users).where(eq(users.status, "pending")).orderBy(desc(users.createdAt)).limit(200);
 }
 
-export async function getManagedUsers(filters: { status?: "pending" | "active" | "banned"; q?: string } = {}) {
+export type ManagedUserStatus = "pending" | "active" | "banned" | "deleted";
+
+export async function getManagedUsers(filters: { status?: ManagedUserStatus; q?: string } = {}) {
   const conditions: SQL[] = [];
   if (filters.status) conditions.push(eq(users.status, filters.status));
   if (filters.q) conditions.push(ilike(users.usernameNormalized, `%${filters.q.trim().toLocaleLowerCase("zh-CN")}%`));
-  const [totalRows, activeRows, pendingRows, items] = await Promise.all([
-    getDb().select({ value: count() }).from(users),
+  const [totalRows, activeRows, pendingRows, bannedRows, items] = await Promise.all([
+    getDb().select({ value: count() }).from(users).where(ne(users.status, "deleted")),
     getDb().select({ value: count() }).from(users).where(eq(users.status, "active")),
     getDb().select({ value: count() }).from(users).where(eq(users.status, "pending")),
-    getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, verificationCode: users.bilibiliVerificationCode, createdAt: users.createdAt })
+    getDb().select({ value: count() }).from(users).where(eq(users.status, "banned")),
+    getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, verificationCode: users.bilibiliVerificationCode, createdAt: users.createdAt, deletedAt: users.deletedAt })
       .from(users).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(users.createdAt)).limit(300),
   ]);
-  return { total: totalRows[0]?.value ?? 0, active: activeRows[0]?.value ?? 0, pending: pendingRows[0]?.value ?? 0, items };
+  return { total: totalRows[0]?.value ?? 0, active: activeRows[0]?.value ?? 0, pending: pendingRows[0]?.value ?? 0, banned: bannedRows[0]?.value ?? 0, items };
 }
 
 export async function approveBilibiliUser(hostId: string, userId: string) {
@@ -431,16 +462,56 @@ export async function approveBilibiliUser(hostId: string, userId: string) {
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "bilibili_user_approved", metadata: { userId } });
 }
 
-type SettingsInput = { siteName:string; siteTagline:string; backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; cardOpacity:string; backgroundOverlay:string };
+export async function setManagedUserStatus(hostId: string, userId: string, status: "active" | "banned") {
+  const [target] = await getDb().select({ id: users.id, role: users.role, status: users.status }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target || target.status === "deleted") throw new Error("用户不存在或已经删除");
+  if (target.role === "host") throw new Error("不能在这里修改主播账号");
+  if (status === "active" && target.status !== "banned") throw new Error("只能重新启用已停用账号");
+  if (status === "banned" && target.status !== "active") throw new Error("只能停用已启用账号");
+  await getDb().transaction(async (tx) => {
+    await tx.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
+    if (status === "banned") await tx.delete(sessions).where(eq(sessions.userId, userId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: status === "banned" ? "user_disabled" : "user_reactivated", metadata: { targetUserId: userId } });
+  });
+}
+
+export async function deleteManagedUser(hostId: string, userId: string) {
+  const [target] = await getDb().select({ id: users.id, role: users.role, status: users.status }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target || target.status === "deleted") throw new Error("用户不存在或已经删除");
+  if (target.role === "host") throw new Error("不能删除主播账号");
+  const anonymousName = `已删除用户-${userId.slice(0, 8)}`;
+  await getDb().transaction(async (tx) => {
+    await tx.update(users).set({
+      username: anonymousName,
+      usernameNormalized: anonymousName.toLocaleLowerCase("zh-CN"),
+      passwordHash: `deleted$${crypto.randomUUID()}`,
+      status: "deleted",
+      bilibiliUid: null,
+      bilibiliVerificationCode: null,
+      bilibiliVerifiedAt: null,
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId));
+    await tx.delete(sessions).where(eq(sessions.userId, userId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "user_deleted", metadata: { targetUserId: userId, previousStatus: target.status } });
+  });
+}
+
+type SettingsInput = { backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; cardOpacity:string; backgroundOverlay:string };
 export async function updateSettings(hostId: string, value: SettingsInput) {
-  await getDb().insert(siteSettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
+  const backgroundPatch = value.backgroundType === "built_in" ? { backgroundImageMobileUrl: null } : {};
+  await getDb().insert(siteSettings).values({ id: "default", ...value, ...backgroundPatch, updatedBy: hostId, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, ...backgroundPatch, updatedBy: hostId, updatedAt: new Date() } });
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_theme_updated" });
 }
 
 type SiteCopyInput = Omit<typeof defaultSiteCopy, "id" | "updatedBy" | "updatedAt">;
-export async function updateSiteCopy(hostId: string, value: SiteCopyInput) {
-  await getDb().insert(siteCopySettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: siteCopySettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
-  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_copy_updated" });
+export async function updateSiteCopy(hostId: string, identity: { siteName: string; siteTagline: string }, value: SiteCopyInput) {
+  await getDb().transaction(async (tx) => {
+    await tx.insert(siteSettings).values({ id: "default", ...identity, updatedBy: hostId, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: siteSettings.id, set: { ...identity, updatedBy: hostId, updatedAt: new Date() } });
+    await tx.insert(siteCopySettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: siteCopySettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "site_copy_updated" });
+  });
 }

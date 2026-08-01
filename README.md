@@ -127,9 +127,9 @@ Playwright 的未登录公开页面测试无需数据库；完整账号/事务�
 
 ## Vercel Blob（可选）
 
-在 Vercel Storage 创建 Blob store，并把自动生成的 `BLOB_READ_WRITE_TOKEN` 连接到项目。未配置时，主题页会明确提示，内置背景和所有其他功能仍正常。
+在 Vercel 项目的 Storage 页面创建并连接一个 Public Blob store。Vercel 会为所选环境自动添加 `BLOB_READ_WRITE_TOKEN`；添加后需要重新部署。不要把真实令牌提交到 GitHub。本地可通过 `vercel link` 后运行 `vercel env pull .env.local` 获取令牌。未配置或仍使用示例占位符时，主题页会显示配置步骤，内置背景和其他功能仍正常。
 
-神绮爱上传仅允许 PNG/JPEG/WebP、最大 5 MB；服务端同时检查 MIME 与文件签名，随机命名，不允许 SVG。数据库成功更新后才替换旧背景。
+主题页内置无第三方依赖的 Canvas 裁切工具：可拖动、缩放、左右旋转，并分别生成 1920×1080 电脑背景和 1080×1920 手机背景。原图允许 PNG/JPEG/WebP、最大 20 MB；浏览器会压缩为 WebP，每张成品不超过 2 MB、合计不超过 4 MB，以适应 Vercel Function 的请求限制。服务端仍会检查 MIME 与文件签名、随机命名且拒绝 SVG；两张新图与数据库均成功后才替换旧背景。
 
 美食家第一版只保存文字和普通相关链接。后续图片功能建议增加独立图片字段并使用 Vercel Blob；外部图床链接也能接入，但图片可能失效、限制防盗链或泄露访客 IP，因此不建议把任意外链直接当作长期封面。若启用外链，应限制 HTTPS、校验响应类型并使用域名白名单。
 

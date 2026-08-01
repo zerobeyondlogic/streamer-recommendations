@@ -8,7 +8,7 @@ import {
   categories, categoryLabels, contentStatusLabel, contentStatuses, feedSorts, submissionKind,
   type Category, type FeedSort, type SubmissionKind,
 } from "@/lib/config";
-import { getPublicFeed, getSettings, getSiteCopy } from "@/lib/data";
+import { getPublicFeed, getSiteCopy } from "@/lib/data";
 import { safePageNumber } from "@/lib/security";
 import { formatDate } from "@/lib/view";
 
@@ -36,13 +36,12 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
   const sort: FeedSort = feedSorts.includes(rawSort as FeedSort) && !(kind === "wish" && rawSort === "score") ? rawSort as FeedSort : "time";
   const hostRecommended = one(params.hostRecommended) === "1";
   const page = safePageNumber(one(params.page));
-  const [settings, siteCopy, feed] = await Promise.all([
-    getSettings(),
+  const [siteCopy, feed] = await Promise.all([
     getSiteCopy(),
     getPublicFeed({ kind, category, status, q, sort, hostRecommended, page }),
   ]);
   const pageCopy = kind === "work"
-    ? { ...copy.work, title: `${siteCopy.recommendationHeroTitle}${siteCopy.recommendationHeroAccent}`, description: settings.siteTagline, section: siteCopy.recommendationSectionTitle }
+    ? { ...copy.work, title: `${siteCopy.recommendationHeroTitle}${siteCopy.recommendationHeroAccent}`, description: siteCopy.recommendationTagline, section: siteCopy.recommendationSectionTitle }
     : kind === "food"
       ? { ...copy.food, title: siteCopy.foodHeroTitle, description: siteCopy.foodTagline, section: siteCopy.foodSectionTitle }
       : { ...copy.wish, title: siteCopy.wishHeroTitle, description: siteCopy.wishTagline, section: siteCopy.wishSectionTitle };

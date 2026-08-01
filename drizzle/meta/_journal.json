@@ -57,6 +57,20 @@
       "when": 1785575530091,
       "tag": "0007_nifty_argent",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785587090665,
+      "tag": "0008_loving_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785592591443,
+      "tag": "0009_youthful_deathbird",
+      "breakpoints": true
     }
   ]
 }

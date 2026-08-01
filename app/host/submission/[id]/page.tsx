@@ -4,6 +4,7 @@ import { openSubmissionAction, pinAction, replyAction, restoreAction, scoreActio
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { StyledSelect } from "@/components/styled-select";
+import { SubmissionContentEditor } from "@/components/submission-content-editor";
 import { categoryLabels, contentStatusLabel, contentStatuses, submissionKind, submissionKindLabels } from "@/lib/config";
 import { getHostSubmission } from "@/lib/data";
 import { formatDate } from "@/lib/view";
@@ -33,11 +34,13 @@ export default async function HostSubmissionPage({ params, searchParams }: { par
     </form> : null}
 
     <section className="panel detail-panel">
-      <div className="card-top"><span className={`collection-pill collection-pill-${kind}`}>{submissionKindLabels[kind]}</span><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.source === "host" ? <span className="host-badge">神绮爱原创</span> : null}<span className="status">{contentStatusLabel(item.category,item.contentStatus)}</span>{item.score && kind !== "wish" ? <span className="score compact-score"><b>{item.score}</b><small>/10</small></span> : null}{item.anonymousPublic ? <span className="pin">公开匿名</span> : null}{item.pinnedAt ? <span className="pin">已置顶</span> : null}</div>
+      <div className="card-top"><span className={`collection-pill collection-pill-${kind}`}>{submissionKindLabels[kind]}</span><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.source === "host" ? <span className="host-badge">神绮爱原创</span> : null}{item.publishedAt ? <span className="published-pill">已公开</span> : null}<span className="status">{contentStatusLabel(item.category,item.contentStatus)}</span>{item.score && kind !== "wish" ? <span className="score compact-score"><b>{item.score}</b><small>/10</small></span> : null}{item.anonymousPublic ? <span className="pin">公开匿名</span> : null}{item.pinnedAt ? <span className="pin">已置顶</span> : null}</div>
       <h2>{kind === "wish" ? "愿望说明" : "推荐理由"}</h2><p className="description prewrap">{item.description ? <BvText>{item.description}</BvText> : kind === "wish" ? "没有补充愿望说明。" : "暂无推荐理由。"}</p>
       {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">相关链接 ↗</a> : null}
       <div className="record-meta"><span>{item.source === "host" ? "创建于" : "查看于"} {formatDate(item.hostReadAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span></div>
     </section>
+
+    {item.source === "host" ? <section className="panel host-authored-content"><h2>原创内容</h2><p className="helper">修改标题、分类、推荐理由或链接。</p><SubmissionContentEditor item={item} returnTo={returnTo}/></section> : null}
 
     <div className={`host-edit-grid host-edit-grid-${kind}`}>
       <form className="panel stack" action={statusAction}><h2>{kind === "wish" ? "完成状态" : "体验状态"}</h2><input type="hidden" name="submissionId" value={item.id}/><input type="hidden" name="returnTo" value={returnTo}/><StyledSelect name="contentStatus" label="状态" defaultValue={item.contentStatus} options={allowedStatuses.map((status)=>({value:status,label:contentStatusLabel(item.category,status)}))}/><button className="button secondary" type="submit">更新状态</button>{kind !== "wish" ? <span className="helper">非完成状态会清除评分。</span> : null}</form>

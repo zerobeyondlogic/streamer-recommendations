@@ -1,6 +1,6 @@
 import "server-only";
 import { compare, hash } from "bcryptjs";
-import { and, eq, gt, like, or } from "drizzle-orm";
+import { and, eq, gt, like, ne, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -119,4 +119,32 @@ export async function replaceOneTimePassword(userId: string, newPassword: string
     .returning({ id: users.id });
   if (!rows.length) throw new Error("当前账号不需要重设密码");
   await getDb().insert(activityLogs).values({ actorUserId: userId, action: "one_time_password_replaced" });
+}
+
+export async function updateAccountUsername(userId: string, currentPassword: string, username: string) {
+  const [user] = await getDb().select({ passwordHash: users.passwordHash }).from(users).where(and(eq(users.id, userId), eq(users.status, "active"))).limit(1);
+  if (!user || !(await compare(currentPassword, user.passwordHash))) throw new Error("当前密码不正确");
+  const normalized = normalizeUsername(username);
+  const [existing] = await getDb().select({ id: users.id }).from(users).where(and(eq(users.usernameNormalized, normalized), ne(users.id, userId))).limit(1);
+  if (existing) throw new Error("这个用户名已经被使用");
+  try {
+    await getDb().transaction(async (tx) => {
+      await tx.update(users).set({ username, usernameNormalized: normalized, updatedAt: new Date() }).where(eq(users.id, userId));
+      await tx.insert(activityLogs).values({ actorUserId: userId, action: "account_username_updated" });
+    });
+  } catch (error) {
+    if (String(error).includes("users_username_normalized_uidx")) throw new Error("这个用户名已经被使用");
+    throw error;
+  }
+}
+
+export async function updateAccountPassword(userId: string, currentPassword: string, newPassword: string) {
+  const [user] = await getDb().select({ passwordHash: users.passwordHash }).from(users).where(and(eq(users.id, userId), eq(users.status, "active"))).limit(1);
+  if (!user || !(await compare(currentPassword, user.passwordHash))) throw new Error("当前密码不正确");
+  const passwordHash = await hash(newPassword, 12);
+  await getDb().transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+    await tx.delete(sessions).where(eq(sessions.userId, userId));
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: "account_password_updated" });
+  });
 }

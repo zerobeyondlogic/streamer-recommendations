@@ -1,0 +1,1 @@
+ALTER TABLE "site_settings" ADD COLUMN "background_image_mobile_url" text;

@@ -7,15 +7,17 @@ import { del, put } from "@vercel/blob";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { siteCopySettings, siteSettings } from "@/db/schema";
-import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, resetUserPassword } from "@/lib/auth";
+import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, resetUserPassword, updateAccountPassword, updateAccountUsername } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
+  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAuthoredSubmission, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin, safeLocalPath } from "@/lib/security";
-import { changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { accountPasswordSchema, accountUsernameSchema, changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { categories, contentStatuses, submissionKind } from "@/lib/config";
+import { themePresets } from "@/lib/themes";
+import { isBlobStorageConfigured } from "@/lib/blob";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
 function go(path: string, message: string, type: "error" | "success" = "error"): never {
@@ -72,6 +74,32 @@ export async function changeOneTimePasswordAction(form: FormData) {
   go("/login", "密码已更新，请使用新密码登录", "success");
 }
 
+export async function updateAccountUsernameAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const limit = consumeRateLimit(`account-username:${user.id}`, 6, 60 * 60_000);
+  if (!limit.ok) go("/me/account", `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
+  const parsed = accountUsernameSchema.safeParse({ username: value(form, "username"), currentPassword: value(form, "currentPassword") });
+  if (!parsed.success) go("/me/account", parsed.error.issues[0]?.message ?? "账号信息无效");
+  try { await updateAccountUsername(user.id, parsed.data.currentPassword, parsed.data.username); }
+  catch (error) { go("/me/account", error instanceof Error ? error.message : "用户名修改失败"); }
+  revalidatePath("/", "layout");
+  go("/me/account", "用户名已更新", "success");
+}
+
+export async function updateAccountPasswordAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const limit = consumeRateLimit(`account-password:${user.id}`, 5, 60 * 60_000);
+  if (!limit.ok) go("/me/account", `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
+  const parsed = accountPasswordSchema.safeParse({ currentPassword: value(form, "currentPassword"), password: value(form, "password"), confirmPassword: value(form, "confirmPassword") });
+  if (!parsed.success) go("/me/account", parsed.error.issues[0]?.message ?? "密码无效");
+  try { await updateAccountPassword(user.id, parsed.data.currentPassword, parsed.data.password); }
+  catch (error) { go("/me/account", error instanceof Error ? error.message : "密码修改失败"); }
+  await logout();
+  go("/login", "密码已更新，请重新登录", "success");
+}
+
 export type ResetPasswordState = { error?: string; oneTimePassword?: string; username?: string };
 export async function resetUserPasswordAction(_state: ResetPasswordState, form: FormData): Promise<ResetPasswordState> {
   await assertSameOrigin();
@@ -87,20 +115,50 @@ export async function resetUserPasswordAction(_state: ResetPasswordState, form: 
 export async function submitAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
-  const limit = consumeRateLimit(`submit:${user.id}`, 5, 60 * 60_000);
   const rawCategory = value(form, "category");
   const validCategory = categories.includes(rawCategory as never) ? rawCategory as (typeof categories)[number] : "book";
   const kind = submissionKind(validCategory);
   const returnTo = kind === "work" ? "/submit" : `/submit?kind=${kind}`;
-  if (!limit.ok) go(returnTo, `投稿有点快，请 ${limit.retryAfter} 秒后再试`);
   const parsed = submissionSchema.safeParse({
     category: rawCategory, title: value(form, "title"), description: value(form, "description"),
     externalUrl: value(form, "externalUrl"), anonymousPublic: form.get("anonymousPublic") === "on",
   });
   if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "投稿内容有误");
+  if (user.role === "host") {
+    let row: Awaited<ReturnType<typeof createHostRecommendation>>;
+    try {
+      row = await createHostRecommendation(user.id, {
+        category: parsed.data.category, title: parsed.data.title, description: parsed.data.description,
+        externalUrl: parsed.data.externalUrl, score: null, experience: null, pin: false, pinNote: null,
+      });
+    } catch (error) { go(returnTo, error instanceof Error ? error.message : "发布失败"); }
+    revalidatePublicCollections(); revalidatePath("/host/library"); revalidatePath("/me/submissions");
+    go(`/host/submission/${row.id}`, "已直接公开，无需审核", "success");
+  }
+  const limit = consumeRateLimit(`submit:${user.id}`, 5, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `投稿有点快，请 ${limit.retryAfter} 秒后再试`);
   await createSubmission(user.id, parsed.data);
   revalidatePath("/me/submissions");
   go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
+}
+
+export async function updateOwnSubmissionAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const id = submissionId(form);
+  const returnTo = safeLocalPath(value(form, "returnTo") || "/me/submissions");
+  if (!id) go(returnTo, "内容编号无效");
+  const parsed = submissionSchema.safeParse({
+    category: value(form, "category"), title: value(form, "title"), description: value(form, "description"),
+    externalUrl: value(form, "externalUrl"), anonymousPublic: form.get("anonymousPublic") === "on",
+  });
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "修改内容有误");
+  const limit = consumeRateLimit(`submission-edit:${user.id}`, 20, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
+  try { await updateAuthoredSubmission(user.id, id, parsed.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "修改失败"); }
+  revalidatePublicCollections(); revalidatePath("/me/submissions"); revalidatePath("/host/inbox"); revalidatePath("/host/library"); revalidatePath(`/submission/${id}`); revalidatePath(`/host/submission/${id}`);
+  go(returnTo, "内容已更新", "success");
 }
 
 const marshmallowId = (form: FormData) => {
@@ -235,7 +293,7 @@ export async function deleteOwnSubmissionAction(form: FormData) {
   const ok = await deleteOwnUnreadSubmission(user.id, id);
   revalidatePath("/me/submissions");
   if (!ok) go("/me/submissions", "只有神绮爱尚未查看的投稿可以撤回");
-  go("/me/submissions", "投稿已撤回", "success");
+  go("/me/submissions", "投稿已撤回并永久删除", "success");
 }
 
 export async function readNotificationAction(form: FormData) {
@@ -248,7 +306,7 @@ export async function readAllNotificationsAction() { await assertSameOrigin(); c
 export async function openSubmissionAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form);
   if (!id) go("/host/inbox", "投稿编号无效");
-  await markReadAndPublish(host.id, id); revalidatePublicCollections(); revalidatePath("/host/inbox"); redirect(`/host/submission/${id}`);
+  await markReadAndPublish(host.id, id); revalidatePublicCollections(); revalidatePath("/host/inbox"); go(`/host/submission/${id}`, "已公开，体验状态保持不变", "success");
 }
 
 export async function softDeleteAction(form: FormData) { await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form); if (!id) go("/host/inbox", "投稿编号无效"); await softDelete(host.id, id); revalidatePublicCollections(); revalidatePath("/host"); go(value(form, "returnTo") || "/host/inbox", "投稿已删除，可在当前列表中恢复", "success"); }
@@ -282,6 +340,29 @@ export async function approveBilibiliUserAction(form: FormData) {
   revalidatePath("/host/users"); go("/host/users", "B 站 UID 已核验，用户现在可以登录投稿", "success");
 }
 
+export async function managedUserStatusAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const userId = z.uuid().safeParse(value(form, "userId"));
+  const status = value(form, "status");
+  if (!userId.success || (status !== "active" && status !== "banned")) go("/host/users", "用户操作无效");
+  try { await setManagedUserStatus(host.id, userId.data, status); }
+  catch (error) { go("/host/users", error instanceof Error ? error.message : "用户状态更新失败"); }
+  revalidatePath("/host/users");
+  go("/host/users", status === "banned" ? "账号已停用，现有登录已失效" : "账号已重新启用", "success");
+}
+
+export async function deleteManagedUserAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const userId = z.uuid().safeParse(value(form, "userId"));
+  if (!userId.success) go("/host/users", "用户编号无效");
+  try { await deleteManagedUser(host.id, userId.data); }
+  catch (error) { go("/host/users", error instanceof Error ? error.message : "账号删除失败"); }
+  revalidatePath("/host/users"); revalidatePublicCollections(); revalidatePath("/marshmallow");
+  go("/host/users", "账号已删除并匿名化，历史内容仍会保留", "success");
+}
+
 export async function pinAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const parsed = hostUpdateSchema.safeParse({ submissionId: value(form, "submissionId"), pinNote: value(form, "pinNote") });
   if (!parsed.success) go("/host/library", "置顶信息无效");
@@ -301,10 +382,12 @@ export async function replyAction(form: FormData) {
 
 export async function themeAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost();
+  const current = await getSettings();
   const parsed = themeSchema.safeParse(Object.fromEntries(form.entries()));
   if (!parsed.success) go("/host/theme", parsed.error.issues[0]?.message ?? "主题设置无效");
   if (contrastRatio("#1f2430", parsed.data.backgroundColor) < 4.5) go("/host/theme", "页面背景与正文颜色对比度过低，请选择更浅的背景色");
   await updateSettings(host.id, { ...parsed.data, cardOpacity: String(parsed.data.cardOpacity), backgroundOverlay: String(parsed.data.backgroundOverlay) });
+  if (current.backgroundType === "custom" && parsed.data.backgroundType === "built_in" && isBlobStorageConfigured()) await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", "主题已保存", "success");
 }
 
@@ -312,7 +395,8 @@ export async function siteCopyAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost();
   const parsed = siteCopySchema.safeParse(Object.fromEntries(form.entries()));
   if (!parsed.success) go("/host/theme", parsed.error.issues[0]?.message ?? "页面文案无效");
-  await updateSiteCopy(host.id, parsed.data);
+  const { siteName, siteTagline, ...copy } = parsed.data;
+  await updateSiteCopy(host.id, { siteName, siteTagline }, copy);
   revalidatePath("/", "layout"); revalidatePath("/food"); revalidatePath("/wishes"); revalidatePath("/marshmallow");
   go("/host/theme", "页面文案已保存", "success");
 }
@@ -322,32 +406,55 @@ export async function resetThemeAction() {
   const current=await getSettings();
   await getDb().delete(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default"));
   await getDb().delete(siteCopySettings).where((await import("drizzle-orm")).eq(siteCopySettings.id, "default"));
-  if(current.backgroundType==="custom"&&current.backgroundImageUrl&&process.env.BLOB_READ_WRITE_TOKEN)await del(current.backgroundImageUrl).catch(()=>undefined);
+  if(current.backgroundType==="custom"&&isBlobStorageConfigured())await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", `已恢复默认主题（由 ${host.username} 操作）`, "success");
+}
+
+const MAX_CROPPED_BACKGROUND_SIZE = 2 * 1024 * 1024;
+async function croppedBackgroundFile(form: FormData, key: string, label: string) {
+  const file = form.get(key);
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_CROPPED_BACKGROUND_SIZE) throw new Error(`${label}必须是裁切后不超过 2 MB 的图片`);
+  const signatures: Record<string, number[][]> = { "image/png": [[0x89,0x50,0x4e,0x47]], "image/jpeg": [[0xff,0xd8,0xff]], "image/webp": [[0x52,0x49,0x46,0x46]] };
+  if (!signatures[file.type]) throw new Error(`${label}只允许 PNG、JPEG 或 WebP`);
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const valid = signatures[file.type].some((signature) => signature.every((byte, index) => bytes[index] === byte)) && (file.type !== "image/webp" || String.fromCharCode(...bytes.slice(8, 12)) === "WEBP");
+  if (!valid) throw new Error(`${label}的文件内容与格式不匹配`);
+  return file;
 }
 
 export async function uploadBackgroundAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost();
-  if (!process.env.BLOB_READ_WRITE_TOKEN) go("/host/theme", "尚未配置 Vercel Blob，仍可使用内置背景");
-  const file = form.get("background");
-  if (!(file instanceof File) || file.size === 0 || file.size > 5 * 1024 * 1024) go("/host/theme", "请选择不超过 5 MB 的图片");
-  const signatures: Record<string, number[][]> = { "image/png": [[0x89,0x50,0x4e,0x47]], "image/jpeg": [[0xff,0xd8,0xff]], "image/webp": [[0x52,0x49,0x46,0x46]] };
-  if (!signatures[file.type]) go("/host/theme", "只允许 PNG、JPEG 或 WebP，不允许 SVG");
-  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const valid = signatures[file.type].some((sig) => sig.every((byte, i) => bytes[i] === byte)) && (file.type !== "image/webp" || String.fromCharCode(...bytes.slice(8,12)) === "WEBP");
-  if (!valid) go("/host/theme", "文件内容与图片格式不匹配");
+  if (!isBlobStorageConfigured()) go("/host/theme", "请先连接 Vercel Blob 并配置真实的 BLOB_READ_WRITE_TOKEN");
+  let desktop: File; let mobile: File;
+  try {
+    [desktop, mobile] = await Promise.all([
+      croppedBackgroundFile(form, "backgroundDesktop", "电脑背景"),
+      croppedBackgroundFile(form, "backgroundMobile", "手机背景"),
+    ]);
+  } catch (error) { go("/host/theme", error instanceof Error ? error.message : "裁切图片无效"); }
+  if (desktop.size + mobile.size > 4 * 1024 * 1024) go("/host/theme", "两张背景合计不能超过 4 MB，请降低图片质量");
   const old = await getDb().select().from(siteSettings).limit(1);
-  const extension = file.type === "image/png" ? "png" : file.type === "image/jpeg" ? "jpg" : "webp";
-  const blob = await put(`backgrounds/${crypto.randomUUID()}.${extension}`, file, { access: "public", addRandomSuffix: false });
-  await getDb().insert(siteSettings).values({ id: "default", backgroundType: "custom", backgroundImageUrl: blob.url, updatedBy: host.id })
-    .onConflictDoUpdate({ target: siteSettings.id, set: { backgroundType: "custom", backgroundImageUrl: blob.url, updatedBy: host.id, updatedAt: new Date() } });
-  if (old[0]?.backgroundType === "custom" && old[0].backgroundImageUrl) await del(old[0].backgroundImageUrl).catch(() => undefined);
-  revalidatePath("/", "layout"); go("/host/theme", "背景图已更新", "success");
+  const extension = (file: File) => file.type === "image/png" ? "png" : file.type === "image/jpeg" ? "jpg" : "webp";
+  const uploaded: string[] = [];
+  try {
+    const desktopBlob = await put(`backgrounds/${crypto.randomUUID()}-desktop.${extension(desktop)}`, desktop, { access: "public", addRandomSuffix: false });
+    uploaded.push(desktopBlob.url);
+    const mobileBlob = await put(`backgrounds/${crypto.randomUUID()}-mobile.${extension(mobile)}`, mobile, { access: "public", addRandomSuffix: false });
+    uploaded.push(mobileBlob.url);
+    await getDb().insert(siteSettings).values({ id: "default", backgroundType: "custom", backgroundImageUrl: desktopBlob.url, backgroundImageMobileUrl: mobileBlob.url, updatedBy: host.id })
+      .onConflictDoUpdate({ target: siteSettings.id, set: { backgroundType: "custom", backgroundImageUrl: desktopBlob.url, backgroundImageMobileUrl: mobileBlob.url, updatedBy: host.id, updatedAt: new Date() } });
+  } catch (error) {
+    await Promise.all(uploaded.map((url) => del(url).catch(() => undefined)));
+    go("/host/theme", error instanceof Error ? `背景上传失败：${error.message}` : "背景上传失败");
+  }
+  if (old[0]?.backgroundType === "custom") await Promise.all([old[0].backgroundImageUrl,old[0].backgroundImageMobileUrl].filter((url):url is string=>!!url&&!uploaded.includes(url)).map((url)=>del(url).catch(()=>undefined)));
+  revalidatePath("/", "layout"); go("/host/theme", "电脑与手机背景已更新", "success");
 }
 
 export async function removeBackgroundAction(){
   await assertSameOrigin(); const host=await requireHost(); const current=await getSettings();
-  await getDb().insert(siteSettings).values({id:"default",backgroundType:"built_in",backgroundImageUrl:"builtin:warm",updatedBy:host.id}).onConflictDoUpdate({target:siteSettings.id,set:{backgroundType:"built_in",backgroundImageUrl:"builtin:warm",updatedBy:host.id,updatedAt:new Date()}});
-  if(current.backgroundType==="custom"&&current.backgroundImageUrl&&process.env.BLOB_READ_WRITE_TOKEN)await del(current.backgroundImageUrl).catch(()=>undefined);
+  const warm=themePresets.warm;
+  await getDb().insert(siteSettings).values({id:"default",backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id}).onConflictDoUpdate({target:siteSettings.id,set:{backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id,updatedAt:new Date()}});
+  if(current.backgroundType==="custom"&&isBlobStorageConfigured())await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/","layout");go("/host/theme","自定义背景已移除","success");
 }

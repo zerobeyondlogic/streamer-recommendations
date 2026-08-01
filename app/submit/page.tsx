@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { submitAction } from "@/app/actions";
 import { Notice } from "@/components/notice";
 import { StyledSelect } from "@/components/styled-select";
@@ -6,8 +7,9 @@ import { categoryLabels, categories, submissionKinds, type SubmissionKind } from
 import { requireUser } from "@/lib/auth";
 export const metadata: Metadata = { title: "推荐作品" };
 export default async function SubmitPage({ searchParams }: { searchParams: Promise<{ error?: string; kind?: string }> }) {
-  await requireUser(); const { error, kind: rawKind } = await searchParams;
+  const user = await requireUser(); const { error, kind: rawKind } = await searchParams;
   const kind: SubmissionKind = submissionKinds.includes(rawKind as SubmissionKind) ? rawKind as SubmissionKind : "work";
+  if (user.role === "host") redirect(kind === "work" ? "/host/recommend" : `/host/recommend?kind=${kind}`);
   const workCategories = categories.filter((item) => item !== "food" && item !== "wish");
   const config = kind === "food"
     ? { eyebrow: "美食家投稿", title: "推荐一份美食", description: "写下店铺、菜品和推荐理由。", name: "店铺 / 菜品名称", placeholder: "例如：店名 · 招牌菜", reason: "位置与推荐理由（选填）", reasonPlaceholder: "在哪座城市？什么值得点？", submit: "提交到美食家", category: "food" }
