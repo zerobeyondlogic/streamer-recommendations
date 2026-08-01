@@ -174,6 +174,7 @@ const submissionId = (form: FormData) => {
 export async function submitMarshmallowAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
+  if (user.role === "host") go("/marshmallow", "主播账号不能投递棉花糖");
   const limit = consumeRateLimit(`marshmallow:${user.id}`, 10, 60 * 60_000);
   if (!limit.ok) go("/marshmallow", `投递有点快，请 ${limit.retryAfter} 秒后再试`);
   const parsed = marshmallowSchema.safeParse({ content: value(form, "content"), allowPublic: form.get("allowPublic") === "on" });
