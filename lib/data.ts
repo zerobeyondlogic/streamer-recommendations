@@ -329,15 +329,13 @@ export async function getHostStats() {
   return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value];
 }
 
-export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; kind?: SubmissionKind; read?: string; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
+export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; kind?: SubmissionKind; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
   const conditions = filters.view === "library" ? [isNotNull(submissions.publishedAt)] : [];
-  if (filters.view === "inbox") conditions.push(eq(submissions.source, "user"));
+  if (filters.view === "inbox") conditions.push(eq(submissions.source, "user"), isNull(submissions.publishedAt), isNull(submissions.deletedAt));
   if (filters.kind === "work") conditions.push(notInArray(submissions.category, ["food", "wish"]));
   if (filters.kind === "food") conditions.push(eq(submissions.category, "food"));
   if (filters.kind === "wish") conditions.push(eq(submissions.category, "wish"));
   if (filters.id) conditions.push(eq(submissions.id, filters.id));
-  if (filters.read === "unread") conditions.push(isNull(submissions.hostReadAt));
-  if (filters.read === "read") conditions.push(isNotNull(submissions.hostReadAt));
   if (filters.category) conditions.push(eq(submissions.category, filters.category as Category));
   if (filters.status) conditions.push(eq(submissions.contentStatus, filters.status as ContentStatus));
   if (filters.q) conditions.push(ilike(submissions.normalizedTitle, `%${normalizeTitle(filters.q)}%`));
