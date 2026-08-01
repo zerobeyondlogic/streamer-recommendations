@@ -2,9 +2,10 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { Bell, Cloud, LogIn, Sparkles, UserPlus } from "lucide-react";
+import { Cloud, LogIn, Sparkles, UserPlus } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { MainNavigation } from "@/components/main-navigation";
+import { NotificationLink } from "@/components/notification-link";
 import { ThemeModeToggle } from "@/components/theme-mode-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings, unreadNotificationCount } from "@/lib/data";
@@ -42,13 +43,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="zh-CN" style={style} suppressHydrationWarning>
       <head>{customFontCss ? <style dangerouslySetInnerHTML={{ __html: customFontCss }}/> : null}<script dangerouslySetInnerHTML={{ __html: colorModeBootScript }}/></head>
       <body suppressHydrationWarning className={customBackgroundUrl ? "has-custom-background" : `built-in-background ${settings.backgroundImageUrl?.startsWith("builtin:") ? settings.backgroundImageUrl.replace(":", "-") : "builtin-warm"}`}>
+        <div className="site-background" aria-hidden="true" />
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">
           <nav className="nav-shell" aria-label="主导航">
             <div className="nav-top"><Link href="/" className="brand"><span className={`brand-mark${siteIconUrl ? " has-custom-icon" : ""}`} style={siteIconUrl ? { backgroundImage: `url("${siteIconUrl}")` } : undefined}>{siteIconUrl ? null : <Sparkles aria-hidden="true"/>}</span><span>{settings.siteName}</span></Link>
             <div className="nav-links account-links">
               <ThemeModeToggle/>
-              {user ? <Link href="/me/notifications" className="notification-link" aria-label={unread > 0 ? `消息，${unread} 条未读` : "消息"}><Bell className="nav-icon" aria-hidden="true"/><span className="nav-action-label">消息</span>{unread > 0 ? <span className="badge">{unread > 99 ? "99+" : unread}</span> : null}</Link> : null}
+              {user ? <NotificationLink unread={unread}/> : null}
               {user ? <AccountMenu isHost={user.role === "host"}/> : <><Link href="/login" className="nav-login" aria-label="登录"><LogIn className="nav-icon" aria-hidden="true"/><span className="nav-action-label">登录</span></Link><Link href="/register" className="nav-cta" aria-label="注册"><UserPlus className="nav-icon" aria-hidden="true"/><span className="nav-action-label">注册</span></Link></>}
             </div></div>
             <MainNavigation/>
