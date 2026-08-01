@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categories, contentStatuses } from "./config";
+import { hasBalancedSpoilers } from "./spoilers";
 
 const text = (max: number) => z.string().trim().max(max);
 export const usernameSchema = z.string().trim().min(2, "用户名至少 2 个字符").max(32, "用户名最多 32 个字符").regex(/^[\p{L}\p{N}_-]+$/u, "用户名只能包含文字、数字、下划线和短横线");
@@ -19,6 +20,12 @@ export const submissionSchema = z.object({
 export const marshmallowSchema = z.object({
   content: text(1000).min(1, "请写下想对神绮爱说的话"),
   allowPublic: z.coerce.boolean().default(false),
+});
+
+export const submissionReviewSchema = z.object({
+  submissionId: z.uuid(),
+  recommend: z.enum(["recommend", "not_recommend"]),
+  comment: text(2000).refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||").optional().transform((value) => value || null),
 });
 
 export const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "请使用 6 位十六进制颜色");
@@ -47,13 +54,10 @@ export const hostUpdateSchema = z.object({
 export const scoreSchema = z.union([z.literal(""), z.coerce.number().int().min(1).max(10)]).transform((value) => value === "" ? null : value);
 
 export const hostRecommendationSchema = submissionSchema.omit({ anonymousPublic: true }).extend({
-  contentStatus: z.enum(contentStatuses),
   score: scoreSchema,
   experience: text(4000).optional().transform((value) => value || null),
   pin: z.coerce.boolean().default(false),
   pinNote: text(300).optional().transform((value) => value || null),
-}).superRefine((value, context) => {
-  if (value.score !== null && value.contentStatus !== "completed") context.addIssue({ code: "custom", path: ["score"], message: "只有已完成的作品才能评分" });
 });
 
 export function contrastRatio(a: string, b: string) {

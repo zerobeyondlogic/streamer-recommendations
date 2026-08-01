@@ -29,6 +29,13 @@
       "when": 1785562857717,
       "tag": "0003_premium_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785564985281,
+      "tag": "0004_glamorous_grandmaster",
+      "breakpoints": true
     }
   ]
 }

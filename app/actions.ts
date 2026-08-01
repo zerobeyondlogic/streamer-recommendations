@@ -9,12 +9,12 @@ import { getDb } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateScore, updateSettings,
+  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateScore, updateSettings,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
-import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { contentStatuses } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
@@ -83,6 +83,31 @@ export async function submitMarshmallowAction(form: FormData) {
   go("/marshmallow", "棉花糖已送达神绮爱，暂时不会公开", "success");
 }
 
+export async function saveSubmissionReviewAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const parsed = submissionReviewSchema.safeParse({ submissionId: value(form, "submissionId"), recommend: value(form, "recommend"), comment: value(form, "comment") });
+  const fallbackId = z.uuid().safeParse(value(form, "submissionId"));
+  const returnTo = fallbackId.success ? `/submission/${fallbackId.data}` : "/";
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "评价内容有误");
+  const limit = consumeRateLimit(`review:${user.id}`, 20, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `评价操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  try { await saveSubmissionReview(user.id, { submissionId: parsed.data.submissionId, recommend: parsed.data.recommend === "recommend", comment: parsed.data.comment }); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "评价发布失败"); }
+  revalidatePath("/"); revalidatePath(returnTo);
+  go(returnTo, "你的评价已保存", "success");
+}
+
+export async function deleteSubmissionReviewAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const parsed = z.uuid().safeParse(value(form, "submissionId"));
+  const returnTo = parsed.success ? `/submission/${parsed.data}` : "/";
+  if (!parsed.success) go(returnTo, "作品编号无效");
+  try { await deleteSubmissionReview(user.id, parsed.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "撤回失败"); }
+  revalidatePath("/"); revalidatePath(returnTo);
+  go(returnTo, "你的评价已撤回", "success");
+}
+
 const marshmallowId = (form: FormData) => {
   const parsed = z.uuid().safeParse(value(form, "marshmallowId"));
   return parsed.success ? parsed.data : null;
@@ -130,7 +155,7 @@ export async function createHostRecommendationAction(form: FormData) {
   const host = await requireHost();
   const parsed = hostRecommendationSchema.safeParse({
     category: value(form, "category"), title: value(form, "title"), description: value(form, "description"),
-    externalUrl: value(form, "externalUrl"), contentStatus: value(form, "contentStatus"), score: value(form, "score"),
+    externalUrl: value(form, "externalUrl"), score: value(form, "score"),
     experience: value(form, "experience"), pin: form.get("pin") === "on", pinNote: value(form, "pinNote"),
   });
   if (!parsed.success) go("/host/recommend", parsed.error.issues[0]?.message ?? "推荐内容有误");

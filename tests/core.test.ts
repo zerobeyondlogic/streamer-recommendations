@@ -1,9 +1,10 @@
 import { describe,expect,it } from "vitest";
 import { contentStatusLabel } from "../lib/config";
 import { normalizeTitle,normalizeUsername,publicSubmitter,safeSpreadsheetCell,sha256 } from "../lib/security";
-import { colorSchema,marshmallowSchema,submissionSchema,themeSchema } from "../lib/validation";
+import { colorSchema,marshmallowSchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
 import { tokenizeBvText } from "../lib/bilibili";
+import { parseSpoilerText,recommendationScore } from "../lib/spoilers";
 
 describe("账号与输入安全",()=>{
   it("用户名使用 NFKC 且不区分大小写",()=>expect(normalizeUsername("Ｔｅｓｔ用户")).toBe("test用户"));
@@ -24,7 +25,13 @@ describe("匿名、状态和导出规则",()=>{
 
 describe("评分、B站绑定与 BV 链接",()=>{
   it("注册必须提供数字 UID",()=>{expect(registrationSchema.safeParse({username:"观众",password:"12345678",bilibiliUid:"123456"}).success).toBe(true);expect(registrationSchema.safeParse({username:"观众",password:"12345678",bilibiliUid:"BV123"}).success).toBe(false)});
-  it("未完成作品不能评分",()=>expect(hostRecommendationSchema.safeParse({category:"game",title:"作品",description:"",externalUrl:"",contentStatus:"pending",score:"9",experience:"",pin:false,pinNote:""}).success).toBe(false));
+  it("主播原创推荐自动走完成流程，因此可以直接评分",()=>expect(hostRecommendationSchema.safeParse({category:"game",title:"作品",description:"",externalUrl:"",score:"9",experience:"",pin:false,pinNote:""}).success).toBe(true));
   it("把独立 BV 号转换为官方视频地址",()=>{const tokens=tokenizeBvText("看看 BV16v3t6GEpY 很有趣");expect(tokens).toContainEqual({type:"bv",value:"BV16v3t6GEpY",href:"https://www.bilibili.com/video/BV16v3t6GEpY/"})});
   it("不会截取更长字符串中的伪 BV 号",()=>expect(tokenizeBvText("ABV16v3t6GEpY9")).toEqual([{type:"text",value:"ABV16v3t6GEpY9"}]));
+});
+
+describe("社区评价与剧透",()=>{
+  it("净推荐数等于推荐减去不推荐",()=>expect(recommendationScore([true,true,false,true,false])).toBe(1));
+  it("把成对标记中的文字解析为剧透",()=>expect(parseSpoilerText("开头||结局剧透||结尾")).toEqual([{text:"开头",spoiler:false},{text:"结局剧透",spoiler:true},{text:"结尾",spoiler:false}]));
+  it("拒绝没有闭合的剧透标记",()=>expect(submissionReviewSchema.safeParse({submissionId:"00000000-0000-4000-8000-000000000000",recommend:"recommend",comment:"这里有||未闭合剧透"}).success).toBe(false));
 });

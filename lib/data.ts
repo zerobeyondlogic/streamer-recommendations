@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
-import { activityLogs, hostReplies, marshmallows, notifications, siteSettings, submissions, users } from "@/db/schema";
+import { activityLogs, hostReplies, marshmallows, notifications, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort } from "./config";
 import { normalizeTitle, publicSubmitter } from "./security";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects } from "./transitions";
@@ -19,6 +19,7 @@ export async function getSettings() {
 
 export async function getPublicFeed(filters: { category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number } = {}) {
   try {
+    const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} then 1 else -1 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
     const conditions = [isNotNull(submissions.publishedAt), isNull(submissions.deletedAt)];
     if (filters.category) conditions.push(eq(submissions.category, filters.category as Category));
     if (filters.status) conditions.push(eq(submissions.contentStatus, filters.status as ContentStatus));
@@ -34,13 +35,14 @@ export async function getPublicFeed(filters: { category?: string; status?: strin
       createdAt: submissions.createdAt, publishedAt: submissions.publishedAt, feedActivityAt: submissions.feedActivityAt,
       contentStatus: submissions.contentStatus, pinnedAt: submissions.pinnedAt, pinNote: submissions.pinNote,
       source: submissions.source, score: submissions.score,
+      communityScore,
       reply: hostReplies.content, replyPublishedAt: hostReplies.publishedAt,
     }).from(submissions).innerJoin(users, eq(submissions.userId, users.id)).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
       .where(and(...conditions))
       .orderBy(
         desc(sql`${submissions.pinnedAt} is not null`),
         desc(submissions.pinnedAt),
-        ...(filters.sort === "score" ? [sql`${submissions.score} desc nulls last`, desc(submissions.feedActivityAt)] : [desc(submissions.feedActivityAt)]),
+        ...(filters.sort === "score" ? [sql`${submissions.score} desc nulls last`, desc(submissions.feedActivityAt)] : filters.sort === "community" ? [desc(communityScore), desc(submissions.feedActivityAt)] : [desc(submissions.feedActivityAt)]),
       )
       .limit(20).offset((page - 1) * 20);
     return rows.map(({ anonymousPublic, username, ...row }) => ({ ...row, submitter: publicSubmitter(anonymousPublic, username) }));
@@ -52,6 +54,52 @@ export async function createSubmission(userId: string, data: { category: Categor
   const [row] = await getDb().insert(submissions).values({ userId, ...data, normalizedTitle: normalizeTitle(data.title) }).returning({ id: submissions.id });
   await getDb().insert(activityLogs).values({ actorUserId: userId, submissionId: row.id, action: "submission_created" });
   return row;
+}
+
+export async function getPublicSubmissionDetail(submissionId: string, currentUserId?: string, requestedReviewPage = 1) {
+  const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} then 1 else -1 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
+  const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = true)`;
+  const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
+  const commentCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.comment} is not null)`;
+  const [item] = await getDb().select({
+    id: submissions.id, category: submissions.category, title: submissions.title, description: submissions.description,
+    externalUrl: submissions.externalUrl, anonymousPublic: submissions.anonymousPublic, username: users.username,
+    createdAt: submissions.createdAt, publishedAt: submissions.publishedAt, feedActivityAt: submissions.feedActivityAt,
+    contentStatus: submissions.contentStatus, pinnedAt: submissions.pinnedAt, pinNote: submissions.pinNote,
+    source: submissions.source, score: submissions.score, communityScore, recommendCount, notRecommendCount, commentCount,
+    reply: hostReplies.content, replyPublishedAt: hostReplies.publishedAt,
+  }).from(submissions).innerJoin(users, eq(submissions.userId, users.id)).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
+    .where(and(eq(submissions.id, submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
+  if (!item) return null;
+  const reviewPage = Math.max(1, requestedReviewPage);
+  const [reviews, own] = await Promise.all([
+    getDb().select({ id: submissionReviews.id, recommend: submissionReviews.recommend, comment: submissionReviews.comment, createdAt: submissionReviews.createdAt, updatedAt: submissionReviews.updatedAt, username: users.username })
+      .from(submissionReviews).innerJoin(users, eq(submissionReviews.userId, users.id))
+      .where(and(eq(submissionReviews.submissionId, submissionId), isNotNull(submissionReviews.comment)))
+      .orderBy(desc(submissionReviews.updatedAt)).limit(51).offset((reviewPage - 1) * 50),
+    currentUserId ? getDb().select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment })
+      .from(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, currentUserId))).limit(1) : Promise.resolve([]),
+  ]);
+  const { anonymousPublic, username, ...publicItem } = item;
+  return { item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) }, reviews: reviews.slice(0, 50), reviewPage, reviewHasMore: reviews.length > 50, ownReview: own[0] ?? null };
+}
+
+export async function saveSubmissionReview(userId: string, data: { submissionId: string; recommend: boolean; comment: string | null }) {
+  return getDb().transaction(async (tx) => {
+    const [submission] = await tx.select({ id: submissions.id }).from(submissions)
+      .where(and(eq(submissions.id, data.submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
+    if (!submission) throw new Error("这个作品不存在或尚未公开");
+    const now = new Date();
+    await tx.insert(submissionReviews).values({ userId, submissionId: data.submissionId, recommend: data.recommend, comment: data.comment, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { recommend: data.recommend, comment: data.comment, updatedAt: now } });
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId: data.submissionId, action: "submission_review_saved", metadata: { recommend: data.recommend, hasComment: !!data.comment } });
+  });
+}
+
+export async function deleteSubmissionReview(userId: string, submissionId: string) {
+  const rows = await getDb().delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).returning({ id: submissionReviews.id });
+  if (!rows.length) throw new Error("没有可以撤回的评价");
+  await getDb().insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_review_deleted" });
 }
 
 export async function createMarshmallow(userId: string, data: { content: string; allowPublic: boolean }) {
@@ -136,7 +184,7 @@ export async function restoreMarshmallow(hostId: string, marshmallowId: string) 
 
 export async function createHostRecommendation(hostId: string, data: {
   category: Category; title: string; description: string | null; externalUrl: string | null;
-  contentStatus: ContentStatus; score: number | null; experience: string | null; pin: boolean; pinNote: string | null;
+  score: number | null; experience: string | null; pin: boolean; pinNote: string | null;
 }) {
   return getDb().transaction(async (tx) => {
     if (data.pin) {
@@ -148,7 +196,7 @@ export async function createHostRecommendation(hostId: string, data: {
       userId: hostId, source: "host", category: data.category, title: data.title,
       normalizedTitle: normalizeTitle(data.title), description: data.description, externalUrl: data.externalUrl,
       anonymousPublic: false, hostReadAt: now, publishedAt: now, feedActivityAt: now,
-      contentStatus: data.contentStatus, contentCompletedAt: data.contentStatus === "completed" ? now : null,
+      contentStatus: "completed", contentCompletedAt: now,
       score: data.score, pinnedAt: data.pin ? now : null, pinnedBy: data.pin ? hostId : null, pinNote: data.pin ? data.pinNote : null,
     }).returning({ id: submissions.id });
     if (data.experience) await tx.insert(hostReplies).values({ submissionId: row.id, hostUserId: hostId, content: data.experience, publishedAt: now });

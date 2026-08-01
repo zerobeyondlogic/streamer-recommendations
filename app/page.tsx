@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { ThumbsUp } from "lucide-react";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { FilterSelect } from "@/components/filter-select";
 import { MobileFilterDisclosure } from "@/components/mobile-filter-disclosure";
-import { categories, categoryLabels, contentStatusLabel, contentStatuses, type Category, type FeedSort } from "@/lib/config";
+import { categories, categoryLabels, contentStatusLabel, contentStatuses, feedSorts, type Category, type FeedSort } from "@/lib/config";
 import { getPublicFeed } from "@/lib/data";
 import { formatDate } from "@/lib/view";
 
@@ -18,13 +19,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   const rawStatus = one(params.status);
   const status = contentStatuses.includes(rawStatus as never) ? rawStatus : "";
   const q = one(params.q);
-  const sort: FeedSort = one(params.sort) === "score" ? "score" : "time";
+  const rawSort = one(params.sort);
+  const sort: FeedSort = feedSorts.includes(rawSort as FeedSort) ? rawSort as FeedSort : "time";
   const hostRecommended = one(params.hostRecommended) === "1";
   const page = Math.max(1, Number(one(params.page)) || 1);
   const feed = await getPublicFeed({ category, status, q, sort, hostRecommended, page });
   const sectionTitle = category ? `${categoryLabels[category]}推荐` : "最近的作品推荐";
   const nextPage = new URLSearchParams({ ...(category ? { category } : {}), ...(status ? { status } : {}), ...(q ? { q } : {}), sort, ...(hostRecommended ? { hostRecommended: "1" } : {}), page: String(page + 1) });
-  const activeFilterCount = Number(Boolean(q)) + Number(Boolean(category)) + Number(Boolean(status)) + Number(sort === "score") + Number(hostRecommended);
+  const activeFilterCount = Number(Boolean(q)) + Number(Boolean(category)) + Number(Boolean(status)) + Number(sort !== "time") + Number(hostRecommended);
 
   return <div className="page-shell">
     <section className="hero">
@@ -38,7 +40,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
         <label>作品名称搜索<input name="q" defaultValue={q} placeholder="输入作品名称…" maxLength={100} /></label>
         <FilterSelect name="category" label="分类" defaultValue={category ?? ""} options={[{ value: "", label: "首页 · 全部" }, ...categories.map((item) => ({ value: item, label: categoryLabels[item] }))]} />
         <FilterSelect name="status" label="作品状态" defaultValue={status} options={[{ value: "", label: "全部状态" }, ...contentStatuses.map((item) => ({ value: item, label: item === "pending" ? "待体验" : item === "in_progress" ? "进行中" : item === "completed" ? "已完成 / 已玩" : "已放弃" }))]} />
-        <FilterSelect name="sort" label="排序" defaultValue={sort} options={[{ value: "time", label: "最近动态" }, { value: "score", label: "评分从高到低" }]} />
+        <FilterSelect name="sort" label="排序" defaultValue={sort} options={[{ value: "time", label: "最近动态" }, { value: "score", label: "神绮爱评分" }, { value: "community", label: "社区推荐数" }]} />
         <label className="host-recommend-filter"><span>推荐范围</span><span className="check-surface"><input name="hostRecommended" value="1" type="checkbox" defaultChecked={hostRecommended} /><span>只看神绮爱推荐</span></span></label>
         <button className="button small primary" type="submit">筛选</button><Link href={category ? `/?category=${category}` : "/"} className="button small ghost">清空</Link>
       </form></MobileFilterDisclosure>
@@ -48,12 +50,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           const isHostRecommended = item.source === "host" || !!item.pinnedAt;
           return <article className={`feed-card ${item.pinnedAt ? "is-pinned" : ""} ${item.source === "host" ? "is-host-authored" : ""}`} key={item.id} id={item.id}>
             <div className="card-top"><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.pinnedAt ? <span className="pin">置顶</span> : null}{isHostRecommended ? <span className="host-badge">{item.source === "host" ? "神绮爱原创" : "神绮爱推荐"}</span> : null}<span className="status">{contentStatusLabel(item.category, item.contentStatus)}</span></div>
-            <div className="title-row"><h3>{item.title}</h3>{item.score ? <span className="score"><b>{item.score}</b><small>/10</small></span> : null}</div>
+            <div className="title-row"><h3><Link className="submission-title-link" href={`/submission/${item.id}`}>{item.title}</Link></h3>{item.score ? <span className="score"><b>{item.score}</b><small>/10</small></span> : null}</div>
             {item.description ? <p className="description"><BvText>{item.description}</BvText></p> : <p className="description muted">投稿者暂时没有填写推荐理由。</p>}
             {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
             {item.pinNote ? <div className="pin-note"><strong>神绮爱推荐语</strong><BvText>{item.pinNote}</BvText></div> : null}
             {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>神绮爱感想</strong></div><p><BvText>{item.reply}</BvText></p><time>记录于 {formatDate(item.replyPublishedAt)}</time></div> : <div className="waiting-reply">{item.source === "host" ? "神绮爱暂时还没写体验感想" : "神绮爱还在体验中，感想正在路上"}</div>}
-            <footer><span>{item.source === "host" ? "由神绮爱撰写推荐" : `由 ${item.submitter} 推荐`}</span><span>最初记录于 {formatDate(item.createdAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span></footer>
+            <footer><span>{item.source === "host" ? "由神绮爱撰写推荐" : `由 ${item.submitter} 推荐`}</span><span>最初记录于 {formatDate(item.createdAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span><Link className={`community-score-link ${item.communityScore < 0 ? "is-negative" : ""}`} href={`/submission/${item.id}`} aria-label={`查看作品详情，净推荐数 ${item.communityScore}`}><ThumbsUp aria-hidden="true"/><b>{item.communityScore > 0 ? `+${item.communityScore}` : item.communityScore}</b></Link></footer>
           </article>;
         })}
       </div>

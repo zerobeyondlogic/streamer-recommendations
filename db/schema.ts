@@ -103,6 +103,20 @@ export const marshmallows = pgTable("marshmallows", {
   index("marshmallows_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+export const submissionReviews = pgTable("submission_reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  recommend: boolean("recommend").notNull(),
+  comment: text("comment"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("submission_reviews_submission_user_uidx").on(table.submissionId, table.userId),
+  index("submission_reviews_submission_updated_idx").on(table.submissionId, table.updatedAt),
+  check("submission_reviews_comment_length_check", sql`${table.comment} is null or char_length(${table.comment}) between 1 and 2000`),
+]);
+
 export const hostReplies = pgTable("host_replies", {
   id: uuid("id").primaryKey().defaultRandom(),
   submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
@@ -160,4 +174,5 @@ export const activityLogs = pgTable("activity_logs", {
 export type User = typeof users.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
+export type SubmissionReview = typeof submissionReviews.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;

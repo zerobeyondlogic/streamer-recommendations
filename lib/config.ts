@@ -11,7 +11,7 @@ export const categoryLabels: Record<Category, string> = {
 };
 
 export const primaryCategories = categories.filter((category) => category !== "other");
-export const feedSorts = ["time", "score"] as const;
+export const feedSorts = ["time", "score", "community"] as const;
 export type FeedSort = (typeof feedSorts)[number];
 
 const labels = {
