@@ -198,6 +198,7 @@ body{background:var(--page-background)}
 /* Night mode uses the saved brand palette while replacing every reading surface. */
 html[data-color-mode="dark"]{--page-background:color-mix(in srgb,var(--color-background) 8%,#121119);--ink:#f4f0fa;--muted:#b9b2c4;--line:rgb(235 226 247/.15);--shadow:0 14px 38px rgb(0 0 0/.28);--nav-surface:rgb(31 29 41/var(--nav-opacity));--hero-surface:rgb(31 29 41/var(--hero-opacity));--surface:rgb(31 29 41/var(--card-opacity));--surface-solid:#211f2b;--surface-muted:#292632}
 html[data-color-mode="dark"] .background-overlay{background:rgb(13 12 19/var(--background-overlay))}
+html[data-color-mode="dark"] .live-dot{padding:6px 10px;border:1px solid rgb(235 226 247/.16);border-radius:999px;background:rgb(20 18 28/.74);color:#e5dfea;box-shadow:0 5px 16px rgb(0 0 0/.2)}html[data-color-mode="dark"] .live-dot i{background:#65d09a;box-shadow:0 0 0 4px rgb(101 208 154/.18)}
 html[data-color-mode="dark"] .site-header{background:rgb(18 17 25/.9);border-color:var(--line)}
 html[data-color-mode="dark"] .nav-links,html[data-color-mode="dark"] .category-nav>a,html[data-color-mode="dark"] .category-nav-main,html[data-color-mode="dark"] label,html[data-color-mode="dark"] .styled-select-field{color:#c8c1d1}
 html[data-color-mode="dark"] input,html[data-color-mode="dark"] select,html[data-color-mode="dark"] textarea,html[data-color-mode="dark"] .styled-select-trigger,html[data-color-mode="dark"] .host-only-filter,html[data-color-mode="dark"] .icon-button{border-color:var(--line);background:#1d1b25;color:var(--ink);box-shadow:none}
