@@ -7,9 +7,6 @@ export const themePresets = {
     secondaryColor: "#ff9f76",
     accentColor: "#f4c95d",
     backgroundColor: "#fff9f2",
-    navOpacity: 0.94,
-    heroOpacity: 0.94,
-    cardOpacity: 0.94,
     backgroundOverlay: 0.3,
   },
   mint: {
@@ -20,9 +17,6 @@ export const themePresets = {
     secondaryColor: "#77bfae",
     accentColor: "#f2c14e",
     backgroundColor: "#f1fbf7",
-    navOpacity: 0.94,
-    heroOpacity: 0.94,
-    cardOpacity: 0.94,
     backgroundOverlay: 0.25,
   },
   dusk: {
@@ -33,9 +27,6 @@ export const themePresets = {
     secondaryColor: "#8ca3ed",
     accentColor: "#f1bc62",
     backgroundColor: "#f3f4ff",
-    navOpacity: 0.95,
-    heroOpacity: 0.95,
-    cardOpacity: 0.95,
     backgroundOverlay: 0.26,
   },
   blossom: {
@@ -46,9 +37,6 @@ export const themePresets = {
     secondaryColor: "#ef91a6",
     accentColor: "#efbd61",
     backgroundColor: "#fff5f7",
-    navOpacity: 0.95,
-    heroOpacity: 0.95,
-    cardOpacity: 0.95,
     backgroundOverlay: 0.27,
   },
 } as const;

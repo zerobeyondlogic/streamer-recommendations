@@ -34,7 +34,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     "--color-primary": settings.primaryColor, "--color-secondary": settings.secondaryColor,
     "--color-accent": settings.accentColor, "--color-background": settings.backgroundColor,
     "--nav-opacity": settings.navOpacity, "--hero-opacity": settings.heroOpacity,
-    "--card-opacity": settings.cardOpacity, "--background-overlay": settings.backgroundOverlay,
+    "--filter-opacity": settings.filterOpacity, "--card-opacity": settings.cardOpacity,
+    "--nav-backdrop-filter": settings.navBlur ? "blur(18px) saturate(120%)" : "none",
+    "--hero-backdrop-filter": settings.heroBlur ? "blur(14px) saturate(115%)" : "none",
+    "--filter-backdrop-filter": settings.filterBlur ? "blur(14px) saturate(112%)" : "none",
+    "--card-backdrop-filter": settings.cardBlur ? "blur(12px) saturate(110%)" : "none",
+    "--background-overlay": settings.backgroundOverlay,
     ...(customFontUrl ? { "--site-font": '"AkoCustomFont",ui-rounded,"Hiragino Sans GB","Microsoft YaHei UI","PingFang SC",system-ui,sans-serif' } : {}),
     ...(customBackgroundUrl ? { "--custom-background": `url("${customBackgroundUrl}")`, "--custom-background-mobile": `url("${customMobileBackgroundUrl}")` } : {}),
   } as CSSProperties;

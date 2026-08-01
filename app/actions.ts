@@ -10,11 +10,11 @@ import { siteCopySettings, siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, resetUserPassword, updateAccountPassword, updateAccountUsername } from "@/lib/auth";
 import {
   approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAuthoredSubmission, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin, safeLocalPath } from "@/lib/security";
-import { accountPasswordSchema, accountUsernameSchema, changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { categories, contentStatuses, submissionKind } from "@/lib/config";
 import { themePresets } from "@/lib/themes";
 import { isBlobStorageConfigured } from "@/lib/blob";
@@ -390,11 +390,31 @@ export async function themeAction(form: FormData) {
   if (contrastRatio("#1f2430", parsed.data.backgroundColor) < 4.5) go("/host/theme", "页面背景与正文颜色对比度过低，请选择更浅的背景色");
   await updateSettings(host.id, {
     ...parsed.data,
-    navOpacity: String(parsed.data.navOpacity), heroOpacity: String(parsed.data.heroOpacity),
-    cardOpacity: String(parsed.data.cardOpacity), backgroundOverlay: String(parsed.data.backgroundOverlay),
+    backgroundOverlay: String(parsed.data.backgroundOverlay),
   });
   if (current.backgroundType === "custom" && parsed.data.backgroundType === "built_in" && isBlobStorageConfigured()) await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", "主题已保存", "success");
+}
+
+export async function appearanceAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  const raw = Object.fromEntries(form.entries());
+  const parsed = appearanceSchema.safeParse({
+    ...raw,
+    navBlur: form.get("navBlur") === "on",
+    heroBlur: form.get("heroBlur") === "on",
+    filterBlur: form.get("filterBlur") === "on",
+    cardBlur: form.get("cardBlur") === "on",
+  });
+  if (!parsed.success) go("/host/theme", parsed.error.issues[0]?.message ?? "层级外观设置无效");
+  await updateAppearanceSettings(host.id, {
+    ...parsed.data,
+    navOpacity: String(parsed.data.navOpacity),
+    heroOpacity: String(parsed.data.heroOpacity),
+    filterOpacity: String(parsed.data.filterOpacity),
+    cardOpacity: String(parsed.data.cardOpacity),
+  });
+  revalidatePath("/", "layout"); go("/host/theme", "层级外观已保存", "success");
 }
 
 export async function siteCopyAction(form: FormData) {
@@ -460,7 +480,7 @@ export async function uploadBackgroundAction(form: FormData) {
 export async function removeBackgroundAction(){
   await assertSameOrigin(); const host=await requireHost(); const current=await getSettings();
   const warm=themePresets.warm;
-  await getDb().insert(siteSettings).values({id:"default",backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,navOpacity:String(warm.navOpacity),heroOpacity:String(warm.heroOpacity),cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id}).onConflictDoUpdate({target:siteSettings.id,set:{backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,navOpacity:String(warm.navOpacity),heroOpacity:String(warm.heroOpacity),cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id,updatedAt:new Date()}});
+  await getDb().insert(siteSettings).values({id:"default",backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id}).onConflictDoUpdate({target:siteSettings.id,set:{backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id,updatedAt:new Date()}});
   if(current.backgroundType==="custom"&&isBlobStorageConfigured())await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/","layout");go("/host/theme","自定义背景已移除","success");
 }

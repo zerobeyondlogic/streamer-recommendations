@@ -10,7 +10,8 @@ import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmiss
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
   siteIconUrl: null, customFontUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
-  accentColor: "#f4c95d", backgroundColor: "#fff9f2", navOpacity: "0.94", heroOpacity: "0.94", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
+  accentColor: "#f4c95d", backgroundColor: "#fff9f2", navOpacity: "0.94", heroOpacity: "0.94", filterOpacity: "0.72", cardOpacity: "0.94",
+  navBlur: false, heroBlur: false, filterBlur: false, cardBlur: false, backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
 export const defaultSiteCopy = {
@@ -496,12 +497,19 @@ export async function deleteManagedUser(hostId: string, userId: string) {
   });
 }
 
-type SettingsInput = { backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; navOpacity:string; heroOpacity:string; cardOpacity:string; backgroundOverlay:string };
-export async function updateSettings(hostId: string, value: SettingsInput) {
+type ThemeSettingsInput = { backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; backgroundOverlay:string };
+export async function updateSettings(hostId: string, value: ThemeSettingsInput) {
   const backgroundPatch = value.backgroundType === "built_in" ? { backgroundImageMobileUrl: null } : {};
   await getDb().insert(siteSettings).values({ id: "default", ...value, ...backgroundPatch, updatedBy: hostId, updatedAt: new Date() })
     .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, ...backgroundPatch, updatedBy: hostId, updatedAt: new Date() } });
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_theme_updated" });
+}
+
+type AppearanceSettingsInput = { navOpacity:string; heroOpacity:string; filterOpacity:string; cardOpacity:string; navBlur:boolean; heroBlur:boolean; filterBlur:boolean; cardBlur:boolean };
+export async function updateAppearanceSettings(hostId: string, value: AppearanceSettingsInput) {
+  await getDb().insert(siteSettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_appearance_updated" });
 }
 
 type SiteCopyInput = Omit<typeof defaultSiteCopy, "id" | "updatedBy" | "updatedAt">;

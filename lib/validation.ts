@@ -58,10 +58,18 @@ export const themeSchema = z.object({
   secondaryColor: colorSchema,
   accentColor: colorSchema,
   backgroundColor: colorSchema,
+  backgroundOverlay: z.coerce.number().min(0).max(0.85),
+});
+
+export const appearanceSchema = z.object({
   navOpacity: z.coerce.number().min(0.3).max(1),
   heroOpacity: z.coerce.number().min(0.3).max(1),
+  filterOpacity: z.coerce.number().min(0.3).max(1),
   cardOpacity: z.coerce.number().min(0.3).max(1),
-  backgroundOverlay: z.coerce.number().min(0).max(0.85),
+  navBlur: z.coerce.boolean(),
+  heroBlur: z.coerce.boolean(),
+  filterBlur: z.coerce.boolean(),
+  cardBlur: z.coerce.boolean(),
 });
 
 export const siteCopySchema = z.object({
