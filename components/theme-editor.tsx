@@ -20,13 +20,14 @@ type AppearanceState = {
   heroOpacity: number;
   filterOpacity: number;
   cardOpacity: number;
+  ambientTextMist: number;
   navBlur: boolean;
   heroBlur: boolean;
   filterBlur: boolean;
   cardBlur: boolean;
 };
 
-const rootProperties = ["--color-primary", "--color-secondary", "--color-accent", "--color-background", "--nav-opacity", "--hero-opacity", "--filter-opacity", "--card-opacity", "--nav-backdrop-filter", "--hero-backdrop-filter", "--filter-backdrop-filter", "--card-backdrop-filter", "--background-overlay", "--custom-background"] as const;
+const rootProperties = ["--color-primary", "--color-secondary", "--color-accent", "--color-background", "--nav-opacity", "--hero-opacity", "--filter-opacity", "--card-opacity", "--nav-backdrop-filter", "--hero-backdrop-filter", "--filter-backdrop-filter", "--card-backdrop-filter", "--ambient-text-mist", "--background-overlay", "--custom-background"] as const;
 
 export function ThemeEditor({ settings }: { settings: SiteSetting }) {
   const [colors, setColors] = useState<ThemeState>({
@@ -41,6 +42,7 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     heroOpacity: Number(settings.heroOpacity),
     filterOpacity: Number(settings.filterOpacity),
     cardOpacity: Number(settings.cardOpacity),
+    ambientTextMist: Number(settings.ambientTextMist),
     navBlur: settings.navBlur,
     heroBlur: settings.heroBlur,
     filterBlur: settings.filterBlur,
@@ -80,6 +82,7 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     root.style.setProperty("--hero-backdrop-filter", appearance.heroBlur ? "blur(14px) saturate(115%)" : "none");
     root.style.setProperty("--filter-backdrop-filter", appearance.filterBlur ? "blur(14px) saturate(112%)" : "none");
     root.style.setProperty("--card-backdrop-filter", appearance.cardBlur ? "blur(12px) saturate(110%)" : "none");
+    root.style.setProperty("--ambient-text-mist", String(appearance.ambientTextMist));
     root.style.setProperty("--background-overlay", String(colors.overlay));
     document.body.classList.remove("has-custom-background", "built-in-background", "builtin-stars", "builtin-bubbles", ...themePresetIds.map((id) => `builtin-${id}`));
     if (presetId) {
@@ -107,6 +110,7 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     "--preview-hero-opacity": appearance.heroOpacity,
     "--preview-filter-opacity": appearance.filterOpacity,
     "--preview-card-opacity": appearance.cardOpacity,
+    "--preview-ambient-text-mist": appearance.ambientTextMist,
     "--preview-nav-backdrop": appearance.navBlur ? "blur(18px) saturate(120%)" : "none",
     "--preview-hero-backdrop": appearance.heroBlur ? "blur(14px) saturate(115%)" : "none",
     "--preview-filter-backdrop": appearance.filterBlur ? "blur(14px) saturate(112%)" : "none",
@@ -144,10 +148,11 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
         <LayerControl label="搜索与筛选栏" opacityName="filterOpacity" blurName="filterBlur" opacity={appearance.filterOpacity} blur={appearance.filterBlur} onOpacity={(value) => setLayer("filterOpacity", value)} onBlur={(value) => setLayer("filterBlur", value)}/>
         <LayerControl label="普通内容卡片" opacityName="cardOpacity" blurName="cardBlur" opacity={appearance.cardOpacity} blur={appearance.cardBlur} onOpacity={(value) => setLayer("cardOpacity", value)} onBlur={(value) => setLayer("cardBlur", value)}/>
       </div>
+      <div className="appearance-control ambient-mist-control"><label><span>背景悬浮文字雾气<b>{appearance.ambientTextMist.toFixed(2)}</b></span><input name="ambientTextMist" type="range" min="0" max="1" step="0.01" value={appearance.ambientTextMist} onChange={(event) => setLayer("ambientTextMist", Number(event.target.value))}/></label><span className="helper">只影响直接浮在背景图上的文字；不影响菜单、卡片及卡片内文字。</span></div>
       <button className="button primary" type="submit">保存层级外观</button>
     </form>
     </div>
-    <section className="theme-preview-wrap"><span className="eyebrow">实时预览</span><div className={`theme-preview ${presetId ? `builtin-${presetId}` : "theme-preview-custom"}`} style={previewStyle}><Cloud className="preview-cloud" aria-hidden="true"/><div className="theme-preview-nav">网站标题 <span>推荐单　许愿箱　美食家</span></div><div className="theme-preview-hero"><span>页面大卡片</span><h3>把喜欢的作品分享出来</h3><p>顶部主视觉使用独立外观。</p></div><div className="theme-preview-filter"><span>搜索作品……</span><span>全部　⌄</span><b>筛选</b></div><article><span>普通内容卡片</span><h3>一部让人想聊很久的作品</h3><p>列表、详情和表单使用普通卡片外观。</p><button type="button">查看详情</button></article></div></section>
+    <section className="theme-preview-wrap"><span className="eyebrow">实时预览</span><div className={`theme-preview ${presetId ? `builtin-${presetId}` : "theme-preview-custom"}`} style={previewStyle}><Cloud className="preview-cloud" aria-hidden="true"/><div className="theme-preview-nav">网站标题 <span>推荐单　许愿箱　美食家</span></div><div className="theme-preview-hero"><span>页面大卡片</span><h3>把喜欢的作品分享出来</h3><p>顶部主视觉使用独立外观。</p></div><div className="theme-preview-ambient"><span>背景悬浮文字</span><strong>最近的作品推荐</strong></div><div className="theme-preview-filter"><span>搜索作品……</span><span>全部　⌄</span><b>筛选</b></div><article><span>普通内容卡片</span><h3>一部让人想聊很久的作品</h3><p>列表、详情和表单使用普通卡片外观。</p><button type="button">查看详情</button></article></div></section>
   </div>;
 }
 

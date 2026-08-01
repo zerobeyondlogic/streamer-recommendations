@@ -11,7 +11,7 @@ export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
   siteIconUrl: null, customFontUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", navOpacity: "0.94", heroOpacity: "0.94", filterOpacity: "0.72", cardOpacity: "0.94",
-  navBlur: false, heroBlur: false, filterBlur: false, cardBlur: false, backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
+  navBlur: false, heroBlur: false, filterBlur: false, cardBlur: false, ambientTextMist: "0.55", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
 export const defaultSiteCopy = {
@@ -24,7 +24,24 @@ export const defaultSiteCopy = {
 
 export const getSettings = cache(async function getSettings() {
   try { const [value] = await getDb().select().from(siteSettings).where(eq(siteSettings.id, "default")).limit(1); return value ?? defaultSettings; }
-  catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) return defaultSettings; throw error; }
+  catch (error) {
+    const message = String(error);
+    if (message.includes("DATABASE_URL_MISSING")) return defaultSettings;
+    if (message.includes("ambient_text_mist")) {
+      const legacyFields = {
+        id: siteSettings.id, siteName: siteSettings.siteName, siteTagline: siteSettings.siteTagline, siteIconUrl: siteSettings.siteIconUrl,
+        customFontUrl: siteSettings.customFontUrl, recommendationHeroImageUrl: siteSettings.recommendationHeroImageUrl, backgroundType: siteSettings.backgroundType,
+        backgroundImageUrl: siteSettings.backgroundImageUrl, backgroundImageMobileUrl: siteSettings.backgroundImageMobileUrl, primaryColor: siteSettings.primaryColor,
+        secondaryColor: siteSettings.secondaryColor, accentColor: siteSettings.accentColor, backgroundColor: siteSettings.backgroundColor,
+        navOpacity: siteSettings.navOpacity, heroOpacity: siteSettings.heroOpacity, filterOpacity: siteSettings.filterOpacity, cardOpacity: siteSettings.cardOpacity,
+        navBlur: siteSettings.navBlur, heroBlur: siteSettings.heroBlur, filterBlur: siteSettings.filterBlur, cardBlur: siteSettings.cardBlur,
+        backgroundOverlay: siteSettings.backgroundOverlay, updatedBy: siteSettings.updatedBy, updatedAt: siteSettings.updatedAt,
+      };
+      const [legacy] = await getDb().select(legacyFields).from(siteSettings).where(eq(siteSettings.id, "default")).limit(1);
+      return legacy ? { ...legacy, ambientTextMist: defaultSettings.ambientTextMist } : defaultSettings;
+    }
+    throw error;
+  }
 });
 
 export const getSiteCopy = cache(async function getSiteCopy() {
@@ -505,7 +522,7 @@ export async function updateSettings(hostId: string, value: ThemeSettingsInput) 
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_theme_updated" });
 }
 
-type AppearanceSettingsInput = { navOpacity:string; heroOpacity:string; filterOpacity:string; cardOpacity:string; navBlur:boolean; heroBlur:boolean; filterBlur:boolean; cardBlur:boolean };
+type AppearanceSettingsInput = { navOpacity:string; heroOpacity:string; filterOpacity:string; cardOpacity:string; navBlur:boolean; heroBlur:boolean; filterBlur:boolean; cardBlur:boolean; ambientTextMist:string };
 export async function updateAppearanceSettings(hostId: string, value: AppearanceSettingsInput) {
   await getDb().insert(siteSettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
     .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });

@@ -734,7 +734,7 @@ html[data-color-mode="dark"] .button.danger{background:color-mix(in srgb,#b94a4a
 }
 .author-edit-icon svg{width:17px;height:17px}
 
-/* Comment totals need a controlled translucent layer over arbitrary backgrounds. */
+/* Comment totals share the background-facing text treatment below. */
 .comment-count{
   min-height:34px;
   padding:0 11px;
@@ -746,6 +746,102 @@ html[data-color-mode="dark"] .button.danger{background:color-mix(in srgb,#b94a4a
   backdrop-filter:blur(10px);
 }
 .comment-count svg{color:var(--color-primary);stroke-width:2.2}
+
+/*
+ * Ambient text readability
+ *
+ * Text that sits directly on the user-selected background gets a restrained,
+ * theme-aware solid-colour mist. It extends well beyond the text instead of
+ * tracing the glyphs or drawing a visible chip.
+ */
+:root{
+  --ambient-text-mist:.55;
+  --ambient-text-mist-color:color-mix(in srgb,var(--page-background) 88%,white);
+}
+html[data-color-mode="dark"]{
+  --ambient-text-mist-color:color-mix(in srgb,var(--page-background) 82%,#121119);
+}
+
+:where(
+  .form-header,
+  .host-heading>div:first-child,
+  .section-heading>div:first-child,
+  .section-heading>.live-dot,
+  .section-heading>.comment-count,
+  .back-link,
+  .auth-switch,
+  .marshmallow-pagination>strong,
+  .site-footer>span
+){
+  position:relative;
+  z-index:0;
+  isolation:isolate;
+}
+
+:where(
+  .form-header,
+  .host-heading>div:first-child,
+  .section-heading>div:first-child,
+  .section-heading>.live-dot,
+  .section-heading>.comment-count,
+  .back-link,
+  .auth-switch,
+  .marshmallow-pagination>strong,
+  .site-footer>span
+)::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-.58em -1.08em;
+  border-radius:50%;
+  background:var(--ambient-text-mist-color);
+  opacity:var(--ambient-text-mist);
+  filter:blur(20px);
+  transform:scale(1.08,1.28);
+  pointer-events:none;
+}
+
+/* Readability labels no longer need their own capsule surfaces. */
+.live-dot,
+html[data-color-mode="dark"] .live-dot,
+.comment-count,
+html[data-color-mode="dark"] .comment-count{
+  min-height:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  box-shadow:none;
+  backdrop-filter:none;
+}
+
+.ambient-mist-control{grid-template-columns:1fr}
+.ambient-mist-control>.helper{line-height:1.65}
+.theme-preview-ambient{
+  position:relative;
+  z-index:0;
+  isolation:isolate;
+  display:grid;
+  width:max-content;
+  max-width:100%;
+  gap:4px;
+  margin:8px 12px;
+  color:var(--ink);
+}
+.theme-preview-ambient::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-12px -22px;
+  border-radius:50%;
+  background:var(--ambient-text-mist-color);
+  opacity:var(--preview-ambient-text-mist);
+  filter:blur(18px);
+  transform:scale(1.08,1.24);
+}
+.theme-preview-ambient span{color:var(--preview-primary);font-size:.65rem;font-weight:900;letter-spacing:.08em}
+.theme-preview-ambient strong{font-size:1.45rem}
 
 @media(max-width:520px){
   .detail-card-actions{margin-left:auto}

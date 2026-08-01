@@ -413,6 +413,7 @@ export async function appearanceAction(form: FormData) {
     heroOpacity: String(parsed.data.heroOpacity),
     filterOpacity: String(parsed.data.filterOpacity),
     cardOpacity: String(parsed.data.cardOpacity),
+    ambientTextMist: String(parsed.data.ambientTextMist),
   });
   revalidatePath("/", "layout"); go("/host/theme", "层级外观已保存", "success");
 }

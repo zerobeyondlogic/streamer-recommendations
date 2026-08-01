@@ -39,6 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     "--hero-backdrop-filter": settings.heroBlur ? "blur(14px) saturate(115%)" : "none",
     "--filter-backdrop-filter": settings.filterBlur ? "blur(14px) saturate(112%)" : "none",
     "--card-backdrop-filter": settings.cardBlur ? "blur(12px) saturate(110%)" : "none",
+    "--ambient-text-mist": settings.ambientTextMist,
     "--background-overlay": settings.backgroundOverlay,
     ...(customFontUrl ? { "--site-font": '"AkoCustomFont",ui-rounded,"Hiragino Sans GB","Microsoft YaHei UI","PingFang SC",system-ui,sans-serif' } : {}),
     ...(customBackgroundUrl ? { "--custom-background": `url("${customBackgroundUrl}")`, "--custom-background-mobile": `url("${customMobileBackgroundUrl}")` } : {}),

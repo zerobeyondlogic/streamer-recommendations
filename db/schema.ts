@@ -165,6 +165,7 @@ export const siteSettings = pgTable("site_settings", {
   heroBlur: boolean("hero_blur").notNull().default(false),
   filterBlur: boolean("filter_blur").notNull().default(false),
   cardBlur: boolean("card_blur").notNull().default(false),
+  ambientTextMist: numeric("ambient_text_mist", { precision: 3, scale: 2 }).notNull().default("0.55"),
   backgroundOverlay: numeric("background_overlay", { precision: 3, scale: 2 }).notNull().default("0.30"),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: updatedAt(),
@@ -174,7 +175,8 @@ export const siteSettings = pgTable("site_settings", {
     check("site_settings_hero_opacity_check", sql`${table.heroOpacity} between 0.30 and 1.00`),
     check("site_settings_filter_opacity_check", sql`${table.filterOpacity} between 0.30 and 1.00`),
     check("site_settings_card_opacity_check", sql`${table.cardOpacity} between 0.30 and 1.00`),
-  check("site_settings_overlay_check", sql`${table.backgroundOverlay} between 0.00 and 0.85`),
+    check("site_settings_ambient_text_mist_check", sql`${table.ambientTextMist} between 0.00 and 1.00`),
+    check("site_settings_overlay_check", sql`${table.backgroundOverlay} between 0.00 and 0.85`),
 ]);
 
 export const siteCopySettings = pgTable("site_copy_settings", {

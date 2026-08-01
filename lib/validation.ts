@@ -66,6 +66,7 @@ export const appearanceSchema = z.object({
   heroOpacity: z.coerce.number().min(0.3).max(1),
   filterOpacity: z.coerce.number().min(0.3).max(1),
   cardOpacity: z.coerce.number().min(0.3).max(1),
+  ambientTextMist: z.coerce.number().min(0).max(1),
   navBlur: z.coerce.boolean(),
   heroBlur: z.coerce.boolean(),
   filterBlur: z.coerce.boolean(),

@@ -1,0 +1,2 @@
+ALTER TABLE "site_settings" ADD COLUMN "ambient_text_mist" numeric(3, 2) DEFAULT '0.55' NOT NULL;--> statement-breakpoint
+ALTER TABLE "site_settings" ADD CONSTRAINT "site_settings_ambient_text_mist_check" CHECK ("site_settings"."ambient_text_mist" between 0.00 and 1.00);
