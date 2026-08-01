@@ -17,7 +17,7 @@ button { cursor:pointer; }
 .nav-shell { max-width:1180px; margin:auto; min-height:72px; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
 .brand { display:flex; align-items:center; gap:10px; font-weight:900; letter-spacing:-.03em; }
 .brand-mark { width:34px; height:34px; display:grid; place-items:center; border-radius:12px; color:white; background:var(--color-primary); transform:rotate(-7deg); }.brand-mark svg{width:18px;height:18px;transform:rotate(7deg)}
-.brand-mark.has-custom-icon{background-color:var(--surface-solid);background-position:center;background-size:cover;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 20%,transparent);transform:none}
+.brand-mark.has-custom-icon{border-radius:0;background-color:transparent;background-position:center;background-repeat:no-repeat;background-size:contain;box-shadow:none;transform:none}
 .nav-links { display:flex; align-items:center; gap:18px; color:#4f4b58; font-size:.92rem; font-weight:650; }
 .nav-links a:hover,.link-button:hover { color:var(--color-primary); }
 .link-button { border:0; padding:0; background:none; color:inherit; }
@@ -356,7 +356,7 @@ html[data-color-mode="dark"] .collection-wish .collection-hero{background:linear
 /* Public hero capsules use their dedicated theme opacity. */
 .collection-work .hero,.collection-hero,.collection-food .collection-hero,.collection-wish .collection-hero,.page-shell.marshmallow-page .marshmallow-hero{border-color:rgb(106 85 72/.12);background:var(--hero-surface);backdrop-filter:none}
 .collection-work .hero::before,.collection-work .hero::after,.collection-hero::after{display:none}
-html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"] .collection-hero,html[data-color-mode="dark"] .collection-food .collection-hero,html[data-color-mode="dark"] .collection-wish .collection-hero,html[data-color-mode="dark"] .page-shell.marshmallow-page .marshmallow-hero{border-color:var(--line);background:var(--hero-surface)}
+html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"] .collection-hero,html[data-color-mode="dark"] .collection-food .collection-hero,html[data-color-mode="dark"] .collection-wish .collection-hero,html[data-color-mode="dark"] .page-shell.marshmallow-page .marshmallow-hero{border-color:var(--line);background:var(--hero-surface);backdrop-filter:none}
 
 /* The top navigation capsule uses its dedicated theme opacity. */
 .nav-shell{border-color:rgb(106 85 72/.12);background:var(--nav-surface);backdrop-filter:none}
