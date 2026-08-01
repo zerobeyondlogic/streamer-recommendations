@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { activityLogs, hostReplies, marshmallows, notifications, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort } from "./config";
@@ -72,12 +72,14 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
     .where(and(eq(submissions.id, submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
   if (!item) return null;
   const reviewPage = Math.max(1, requestedReviewPage);
+  const reviewConditions = [eq(submissionReviews.submissionId, submissionId), isNotNull(submissionReviews.comment)];
+  if (currentUserId) reviewConditions.push(ne(submissionReviews.userId, currentUserId));
   const [reviews, own] = await Promise.all([
     getDb().select({ id: submissionReviews.id, recommend: submissionReviews.recommend, comment: submissionReviews.comment, createdAt: submissionReviews.createdAt, updatedAt: submissionReviews.updatedAt, username: users.username })
       .from(submissionReviews).innerJoin(users, eq(submissionReviews.userId, users.id))
-      .where(and(eq(submissionReviews.submissionId, submissionId), isNotNull(submissionReviews.comment)))
+      .where(and(...reviewConditions))
       .orderBy(desc(submissionReviews.updatedAt)).limit(51).offset((reviewPage - 1) * 50),
-    currentUserId ? getDb().select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment })
+    currentUserId ? getDb().select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment, updatedAt: submissionReviews.updatedAt })
       .from(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, currentUserId))).limit(1) : Promise.resolve([]),
   ]);
   const { anonymousPublic, username, ...publicItem } = item;

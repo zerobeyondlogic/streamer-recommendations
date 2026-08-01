@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Cloud, MessageCircle, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Cloud, MessageCircle, Pencil, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { z } from "zod";
 import { deleteSubmissionReviewAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
@@ -43,19 +43,29 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
       <div className="community-breakdown"><span><ThumbsUp aria-hidden="true"/>{item.recommendCount} 人推荐</span><span><ThumbsDown aria-hidden="true"/>{item.notRecommendCount} 人不推荐</span></div>
     </section>
 
-    <section className="review-compose-section">
-      <div className="section-heading"><div><span className="eyebrow">Your review</span><h2>写下你的评价</h2></div>{ownReview ? <form action={deleteSubmissionReviewAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit">撤回我的评价</button></form> : null}</div>
-      {user ? <ReviewEditor submissionId={item.id} initial={ownReview}/> : <div className="panel review-login-callout"><p>登录后即可推荐并评论。</p><Link className="button primary" href="/login">登录评价</Link></div>}
-    </section>
+    {!ownReview ? <section className="review-compose-section">
+      <div className="section-heading"><div><span className="eyebrow">Your review</span><h2>写下你的评价</h2></div></div>
+      {user ? <ReviewEditor submissionId={item.id}/> : <div className="panel review-login-callout"><p>登录后即可推荐并评论。</p><Link className="button primary" href="/login">登录评价</Link></div>}
+    </section> : null}
 
     <section className="community-comments" id="comments" aria-labelledby="community-comments-title">
       <div className="section-heading"><div><span className="eyebrow">User reviews</span><h2 id="community-comments-title">用户评论</h2></div><span className="comment-count"><MessageCircle aria-hidden="true"/>{item.commentCount} 条文字评论</span></div>
-      <div className="community-comment-list">{reviews.map((review) => <article className={`panel community-comment-card ${review.recommend ? "is-recommended" : "is-not-recommended"}`} key={review.id}>
+      <div className="community-comment-list">
+        {ownReview && user ? <article className={`panel community-comment-card own-community-review ${ownReview.recommend ? "is-recommended" : "is-not-recommended"}`}>
+          <header><span className="review-author review-author-own">{user.username}<small>我的评价</small></span><span className="review-verdict">{ownReview.recommend ? <><ThumbsUp aria-hidden="true"/>推荐</> : <><ThumbsDown aria-hidden="true"/>不推荐</>}</span></header>
+          <SpoilerText className={`community-comment-copy ${ownReview.comment ? "" : "muted"}`}>{ownReview.comment ?? "暂未填写文字评论。"}</SpoilerText>
+          <footer>更新于 {formatDate(ownReview.updatedAt)}</footer>
+          <div className="own-review-actions">
+            <details className="own-review-edit"><summary><Pencil aria-hidden="true"/>修改</summary><ReviewEditor submissionId={item.id} initial={ownReview}/></details>
+            <form action={deleteSubmissionReviewAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit"><X aria-hidden="true"/>撤回评价</button></form>
+          </div>
+        </article> : null}
+        {reviews.map((review) => <article className={`panel community-comment-card ${review.recommend ? "is-recommended" : "is-not-recommended"}`} key={review.id}>
         <header><span className="review-author">{review.username}</span><span className="review-verdict">{review.recommend ? <><ThumbsUp aria-hidden="true"/>推荐</> : <><ThumbsDown aria-hidden="true"/>不推荐</>}</span></header>
         <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
         <footer>评价于 {formatDate(review.updatedAt)}</footer>
       </article>)}</div>
-      {!reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
+      {!ownReview && !reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
       {(reviewPage > 1 || reviewHasMore) ? <nav className="marshmallow-pagination" aria-label="评论分页">{reviewPage > 1 ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage - 1}#comments`}>← 上一页</Link> : <span/>}<strong>第 {reviewPage} 页</strong>{reviewHasMore ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage + 1}#comments`}>下一页 →</Link> : <span/>}</nav> : null}
     </section>
   </div>;

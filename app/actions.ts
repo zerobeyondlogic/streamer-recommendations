@@ -19,7 +19,8 @@ import { contentStatuses } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
 function go(path: string, message: string, type: "error" | "success" = "error"): never {
-  redirect(`${path}${path.includes("?") ? "&" : "?"}${type}=${encodeURIComponent(message)}`);
+  const [pathname, fragment] = path.split("#", 2);
+  redirect(`${pathname}${pathname.includes("?") ? "&" : "?"}${type}=${encodeURIComponent(message)}${fragment ? `#${fragment}` : ""}`);
 }
 async function assertSameOrigin() {
   const h = await headers();
@@ -121,7 +122,7 @@ export async function saveSubmissionReviewAction(form: FormData) {
   try { await saveSubmissionReview(user.id, { submissionId: parsed.data.submissionId, recommend: parsed.data.recommend === "recommend", comment: parsed.data.comment }); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "评价发布失败"); }
   revalidatePath("/"); revalidatePath(returnTo);
-  go(returnTo, "你的评价已保存", "success");
+  go(`${returnTo}#comments`, "你的评价已保存", "success");
 }
 
 export async function deleteSubmissionReviewAction(form: FormData) {
@@ -132,7 +133,7 @@ export async function deleteSubmissionReviewAction(form: FormData) {
   try { await deleteSubmissionReview(user.id, parsed.data); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "撤回失败"); }
   revalidatePath("/"); revalidatePath(returnTo);
-  go(returnTo, "你的评价已撤回", "success");
+  go(`${returnTo}#comments`, "你的评价已撤回", "success");
 }
 
 function safeMarshmallowReturnPath(form: FormData, fallback = "/host/marshmallows") {
