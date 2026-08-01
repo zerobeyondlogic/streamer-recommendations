@@ -1,6 +1,6 @@
 "use client";
 
-import { MoonStar } from "lucide-react";
+import { MoonStar, Sun } from "lucide-react";
 
 const storageKey = "akofans-color-mode";
 
@@ -12,7 +12,7 @@ export function ThemeModeToggle() {
     localStorage.setItem(storageKey, next);
   }
   return <button className="theme-mode-toggle" type="button" onClick={toggle} aria-label="切换日间或夜间模式" title="切换日间或夜间模式">
-    <MoonStar className="nav-icon" aria-hidden="true"/>
-    <span className="nav-action-label">明暗</span>
+    <MoonStar className="nav-icon theme-mode-moon" aria-hidden="true"/>
+    <Sun className="nav-icon theme-mode-sun" aria-hidden="true"/>
   </button>;
 }

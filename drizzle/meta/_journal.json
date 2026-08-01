@@ -71,6 +71,13 @@
       "when": 1785592591443,
       "tag": "0009_youthful_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785595770912,
+      "tag": "0010_set_host_bilibili_uid",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,7 @@ import { createSessionToken, normalizeUsername, sha256 } from "./security";
 import { authSchema, registrationSchema } from "./validation";
 
 const COOKIE_NAME = "sr_session";
-export type SafeUser = Pick<User, "id" | "username" | "role" | "status"> & { mustChangePassword: boolean };
+export type SafeUser = Pick<User, "id" | "username" | "role" | "status" | "bilibiliUid" | "createdAt"> & { mustChangePassword: boolean };
 
 const ONE_TIME_PREFIX = "one-time$";
 const CHANGE_REQUIRED_PREFIX = "change-required$";
@@ -78,10 +78,10 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<Saf
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    const [row] = await getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, passwordHash: users.passwordHash })
+    const [row] = await getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, createdAt: users.createdAt, passwordHash: users.passwordHash })
       .from(sessions).innerJoin(users, eq(sessions.userId, users.id))
       .where(and(eq(sessions.tokenHash, sha256(token)), gt(sessions.expiresAt, new Date()), eq(users.status, "active"))).limit(1);
-    return row ? { id: row.id, username: row.username, role: row.role, status: row.status, mustChangePassword: requiresPasswordChange(row.passwordHash) } : null;
+    return row ? { id: row.id, username: row.username, role: row.role, status: row.status, bilibiliUid: row.bilibiliUid, createdAt: row.createdAt, mustChangePassword: requiresPasswordChange(row.passwordHash) } : null;
   } catch (error) {
     if (String(error).includes("DATABASE_URL_MISSING")) return null;
     throw error;

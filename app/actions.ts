@@ -90,12 +90,13 @@ export async function updateAccountUsernameAction(form: FormData) {
 export async function updateAccountPasswordAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
+  const returnTo = value(form, "returnTo") === "/me/account/password" ? "/me/account/password" : "/me/account";
   const limit = consumeRateLimit(`account-password:${user.id}`, 5, 60 * 60_000);
-  if (!limit.ok) go("/me/account", `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
+  if (!limit.ok) go(returnTo, `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
   const parsed = accountPasswordSchema.safeParse({ currentPassword: value(form, "currentPassword"), password: value(form, "password"), confirmPassword: value(form, "confirmPassword") });
-  if (!parsed.success) go("/me/account", parsed.error.issues[0]?.message ?? "密码无效");
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "密码无效");
   try { await updateAccountPassword(user.id, parsed.data.currentPassword, parsed.data.password); }
-  catch (error) { go("/me/account", error instanceof Error ? error.message : "密码修改失败"); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "密码修改失败"); }
   await logout();
   go("/login", "密码已更新，请重新登录", "success");
 }
