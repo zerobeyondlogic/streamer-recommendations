@@ -16,6 +16,11 @@ export const submissionSchema = z.object({
   anonymousPublic: z.coerce.boolean().default(false),
 });
 
+export const marshmallowSchema = z.object({
+  content: text(1000).min(1, "请写下想对神绮爱说的话"),
+  allowPublic: z.coerce.boolean().default(false),
+});
+
 export const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "请使用 6 位十六进制颜色");
 export const themeSchema = z.object({
   siteName: text(50).min(1),

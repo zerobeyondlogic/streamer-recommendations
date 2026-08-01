@@ -84,6 +84,25 @@ export const submissions = pgTable("submissions", {
   index("submissions_score_idx").on(table.pinnedAt, table.score, table.feedActivityAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
 ]);
 
+export const marshmallows = pgTable("marshmallows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  content: text("content").notNull(),
+  allowPublic: boolean("allow_public").notNull().default(false),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  readBy: uuid("read_by").references(() => users.id, { onDelete: "set null" }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  check("marshmallows_content_length_check", sql`char_length(${table.content}) between 1 and 1000`),
+  index("marshmallows_public_feed_idx").on(table.publishedAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
+  index("marshmallows_pending_idx").on(table.createdAt).where(sql`${table.readAt} is null and ${table.deletedAt} is null`),
+  index("marshmallows_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 export const hostReplies = pgTable("host_replies", {
   id: uuid("id").primaryKey().defaultRandom(),
   submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
@@ -140,4 +159,5 @@ export const activityLogs = pgTable("activity_logs", {
 
 export type User = typeof users.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
+export type Marshmallow = typeof marshmallows.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;

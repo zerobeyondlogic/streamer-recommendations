@@ -4,21 +4,22 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { del, put } from "@vercel/blob";
+import { z } from "zod";
 import { getDb } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreSubmission, saveHostReply, setPinned, softDelete, updateContentStatus, updateScore, updateSettings,
+  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadSubmission, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateScore, updateSettings,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
-import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, scoreSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { contentStatuses } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
 function go(path: string, message: string, type: "error" | "success" = "error"): never {
-  redirect(`${path}?${type}=${encodeURIComponent(message)}`);
+  redirect(`${path}${path.includes("?") ? "&" : "?"}${type}=${encodeURIComponent(message)}`);
 }
 async function assertSameOrigin() {
   const h = await headers();
@@ -68,6 +69,60 @@ export async function submitAction(form: FormData) {
   await createSubmission(user.id, parsed.data);
   revalidatePath("/me/submissions");
   go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
+}
+
+export async function submitMarshmallowAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const limit = consumeRateLimit(`marshmallow:${user.id}`, 10, 60 * 60_000);
+  if (!limit.ok) go("/marshmallow", `投递有点快，请 ${limit.retryAfter} 秒后再试`);
+  const parsed = marshmallowSchema.safeParse({ content: value(form, "content"), allowPublic: form.get("allowPublic") === "on" });
+  if (!parsed.success) go("/marshmallow", parsed.error.issues[0]?.message ?? "棉花糖内容有误");
+  await createMarshmallow(user.id, parsed.data);
+  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go("/marshmallow", "棉花糖已送达神绮爱，暂时不会公开", "success");
+}
+
+const marshmallowId = (form: FormData) => {
+  const parsed = z.uuid().safeParse(value(form, "marshmallowId"));
+  return parsed.success ? parsed.data : null;
+};
+
+function safeMarshmallowReturnPath(form: FormData, fallback = "/host/marshmallows") {
+  const candidate = value(form, "returnTo");
+  return candidate.startsWith("/host/marshmallows") && !candidate.startsWith("//") ? candidate : fallback;
+}
+
+export async function readMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  if (!id) go("/host/marshmallows/stage", "棉花糖编号无效");
+  let result: Awaited<ReturnType<typeof markMarshmallowRead>>;
+  try { result = await markMarshmallowRead(host.id, id); }
+  catch (error) { go("/host/marshmallows/stage", error instanceof Error ? error.message : "处理失败"); }
+  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  const next = z.uuid().safeParse(value(form, "nextId"));
+  const target = next.success ? `/host/marshmallows/stage?id=${next.data}` : "/host/marshmallows/stage";
+  go(target, result.published ? "已读并公开到棉花糖墙" : "已读；这颗棉花糖保持私密", "success");
+}
+
+export async function deleteMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  const returnTo = safeMarshmallowReturnPath(form);
+  if (!id) go(returnTo, "棉花糖编号无效");
+  try { await softDeleteMarshmallow(host.id, id); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "移除失败"); }
+  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go(returnTo, "棉花糖已移除，可在“已移除”列表恢复", "success");
+}
+
+export async function restoreMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  const returnTo = safeMarshmallowReturnPath(form, "/host/marshmallows?status=deleted");
+  if (!id) go(returnTo, "棉花糖编号无效");
+  try { await restoreMarshmallow(host.id, id); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "恢复失败"); }
+  revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go(returnTo, "棉花糖已恢复", "success");
 }
 
 export async function createHostRecommendationAction(form: FormData) {

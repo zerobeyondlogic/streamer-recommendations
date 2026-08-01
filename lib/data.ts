@@ -1,10 +1,10 @@
 import "server-only";
-import { and, count, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
-import { activityLogs, hostReplies, notifications, siteSettings, submissions, users } from "@/db/schema";
+import { activityLogs, hostReplies, marshmallows, notifications, siteSettings, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort } from "./config";
 import { normalizeTitle, publicSubmitter } from "./security";
-import { firstOpenPatch, replyEffects } from "./transitions";
+import { firstOpenPatch, marshmallowReadPatch, replyEffects } from "./transitions";
 
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的作品放映室", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
@@ -52,6 +52,86 @@ export async function createSubmission(userId: string, data: { category: Categor
   const [row] = await getDb().insert(submissions).values({ userId, ...data, normalizedTitle: normalizeTitle(data.title) }).returning({ id: submissions.id });
   await getDb().insert(activityLogs).values({ actorUserId: userId, submissionId: row.id, action: "submission_created" });
   return row;
+}
+
+export async function createMarshmallow(userId: string, data: { content: string; allowPublic: boolean }) {
+  const [row] = await getDb().insert(marshmallows).values({ userId, ...data }).returning({ id: marshmallows.id });
+  await getDb().insert(activityLogs).values({ actorUserId: userId, action: "marshmallow_created", metadata: { marshmallowId: row.id, allowPublic: data.allowPublic } });
+  return row;
+}
+
+export async function getPublicMarshmallows(page = 1) {
+  const safePage = Math.max(1, page);
+  const rows = await getDb().select({
+    id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt,
+  }).from(marshmallows).where(and(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt)))
+    .orderBy(desc(marshmallows.publishedAt), desc(marshmallows.id)).limit(51).offset((safePage - 1) * 50);
+  return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
+}
+
+export type MarshmallowHostStatus = "all" | "pending" | "read" | "published" | "private" | "deleted";
+
+export async function getHostMarshmallows(status: MarshmallowHostStatus = "pending") {
+  const conditions: SQL[] = [];
+  if (status === "pending") conditions.push(isNull(marshmallows.readAt), isNull(marshmallows.deletedAt));
+  else if (status === "read") conditions.push(isNotNull(marshmallows.readAt), isNull(marshmallows.deletedAt));
+  else if (status === "published") conditions.push(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt));
+  else if (status === "private") conditions.push(isNotNull(marshmallows.readAt), isNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt));
+  else if (status === "deleted") conditions.push(isNotNull(marshmallows.deletedAt));
+  else conditions.push(isNull(marshmallows.deletedAt));
+  return getDb().select({
+    id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic,
+    readAt: marshmallows.readAt, publishedAt: marshmallows.publishedAt, deletedAt: marshmallows.deletedAt,
+    createdAt: marshmallows.createdAt, username: users.username,
+  }).from(marshmallows).innerJoin(users, eq(marshmallows.userId, users.id))
+    .where(and(...conditions)).orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(500);
+}
+
+export async function getMarshmallowStage(requestedId?: string) {
+  const pending = [isNull(marshmallows.readAt), isNull(marshmallows.deletedAt)];
+  const selection = { id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic, createdAt: marshmallows.createdAt, username: users.username };
+  const rows = requestedId ? await getDb().select(selection).from(marshmallows).innerJoin(users, eq(marshmallows.userId, users.id))
+    .where(and(eq(marshmallows.id, requestedId), ...pending)).limit(1) : [];
+  const [current] = rows.length ? rows : await getDb().select(selection).from(marshmallows).innerJoin(users, eq(marshmallows.userId, users.id))
+    .where(and(...pending)).orderBy(asc(marshmallows.createdAt), asc(marshmallows.id)).limit(1);
+  if (!current) return null;
+  const sameTimeBefore = and(eq(marshmallows.createdAt, current.createdAt), lt(marshmallows.id, current.id));
+  const sameTimeAfter = and(eq(marshmallows.createdAt, current.createdAt), gt(marshmallows.id, current.id));
+  const [previous] = await getDb().select({ id: marshmallows.id }).from(marshmallows)
+    .where(and(...pending, or(lt(marshmallows.createdAt, current.createdAt), sameTimeBefore)))
+    .orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(1);
+  const [next] = await getDb().select({ id: marshmallows.id }).from(marshmallows)
+    .where(and(...pending, or(gt(marshmallows.createdAt, current.createdAt), sameTimeAfter)))
+    .orderBy(asc(marshmallows.createdAt), asc(marshmallows.id)).limit(1);
+  return { current, previousId: previous?.id ?? null, nextId: next?.id ?? null };
+}
+
+export async function markMarshmallowRead(hostId: string, marshmallowId: string) {
+  return getDb().transaction(async (tx) => {
+    const [current] = await tx.select({ allowPublic: marshmallows.allowPublic }).from(marshmallows)
+      .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt))).limit(1);
+    if (!current) throw new Error("这颗棉花糖不存在或已经处理");
+    const now = new Date();
+    await tx.update(marshmallows).set({ ...marshmallowReadPatch(current.allowPublic, now), readBy: hostId })
+      .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt)));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_read", metadata: { marshmallowId, published: current.allowPublic } });
+    return { published: current.allowPublic };
+  });
+}
+
+export async function softDeleteMarshmallow(hostId: string, marshmallowId: string) {
+  const now = new Date();
+  const rows = await getDb().update(marshmallows).set({ deletedAt: now, deletedBy: hostId, updatedAt: now })
+    .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.deletedAt))).returning({ id: marshmallows.id });
+  if (!rows.length) throw new Error("这颗棉花糖不存在或已经移除");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_deleted", metadata: { marshmallowId } });
+}
+
+export async function restoreMarshmallow(hostId: string, marshmallowId: string) {
+  const rows = await getDb().update(marshmallows).set({ deletedAt: null, deletedBy: null, updatedAt: new Date() })
+    .where(and(eq(marshmallows.id, marshmallowId), isNotNull(marshmallows.deletedAt))).returning({ id: marshmallows.id });
+  if (!rows.length) throw new Error("这颗棉花糖不存在或已经恢复");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_restored", metadata: { marshmallowId } });
 }
 
 export async function createHostRecommendation(hostId: string, data: {
@@ -109,15 +189,16 @@ export async function markNotificationRead(userId: string, notificationId: strin
 export async function markAllNotificationsRead(userId: string) { return getDb().update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.userId, userId), isNull(notifications.readAt))); }
 
 export async function getHostStats() {
-  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unreadRows] = await Promise.all([
+  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unreadRows, marshmallowRows] = await Promise.all([
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.source, "user"), isNull(submissions.hostReadAt), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "pending"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "in_progress"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "completed"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(isNotNull(submissions.pinnedAt), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(notifications).where(isNull(notifications.readAt)),
+    getDb().select({ value: count() }).from(marshmallows).where(and(isNull(marshmallows.readAt), isNull(marshmallows.deletedAt))),
   ]);
-  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value];
+  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value];
 }
 
 export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; read?: string; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
