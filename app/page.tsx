@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ThumbsUp } from "lucide-react";
+import { Cloud, Sparkles, ThumbsUp } from "lucide-react";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { FilterSelect } from "@/components/filter-select";
@@ -31,7 +31,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   return <div className="page-shell">
     <section className="hero">
       <div className="hero-copy"><h1>把喜欢的作品，<em>推荐给神绮爱。</em></h1><p>书籍、漫画、电影、动漫和游戏都可以投稿。</p><div className="hero-actions"><Link className="button primary" href="/submit">推荐一个作品 <span>→</span></Link><a className="button ghost" href="#feed">浏览推荐库</a></div></div>
-      <div className="hero-art" aria-hidden="true"><div className="sun">✦</div><div className="shelf"><span>书籍</span><span>漫画</span><span>电影</span><span>动漫</span><span>游戏</span></div><div className="bubble bubble-a">好耶！</div><div className="bubble bubble-b">给神绮爱的安利</div></div>
+      <div className="hero-art" aria-hidden="true"><div className="sun"><Sparkles/></div><div className="shelf"><span>书籍</span><span>漫画</span><span>电影</span><span>动漫</span><span>游戏</span></div><div className="bubble bubble-a">好耶！</div><div className="bubble bubble-b">给神绮爱的安利</div></div>
     </section>
     <section id="feed" className="feed-section">
       <div className="section-heading"><div><span className="eyebrow">{category ? `${categoryLabels[category]}专栏` : "首页 · 综合时间流"}</span><h2>{sectionTitle}</h2></div><span className="live-dot"><i /> 置顶始终优先</span></div>
@@ -59,7 +59,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           </article>;
         })}
       </div>
-      {feed.length === 0 ? <div className="empty-state"><span>☁︎</span><h3>没有找到作品</h3><p>换个条件试试。</p><Link className="button primary" href="/submit">去投稿</Link></div> : null}
+      {feed.length === 0 ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>没有找到作品</h3><p>换个条件试试。</p><Link className="button primary" href="/submit">去投稿</Link></div> : null}
       {feed.length === 20 ? <div className="pagination"><Link className="button ghost" href={`/?${nextPage}`}>加载更多</Link></div> : null}
     </section>
   </div>;

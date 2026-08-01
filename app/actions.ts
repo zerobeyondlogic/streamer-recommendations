@@ -90,24 +90,24 @@ export async function submitMarshmallowAction(form: FormData) {
 
 export async function updateOwnMarshmallowAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser(); const id = marshmallowId(form);
-  if (!id) go("/marshmallow", "棉花糖编号无效");
+  if (!id) go("/me/submissions", "棉花糖编号无效");
   const parsed = marshmallowSchema.safeParse({ content: value(form, "content"), allowPublic: form.get("allowPublic") === "on" });
-  if (!parsed.success) go("/marshmallow", parsed.error.issues[0]?.message ?? "内容有误");
+  if (!parsed.success) go("/me/submissions", parsed.error.issues[0]?.message ?? "内容有误");
   const limit = consumeRateLimit(`marshmallow-edit:${user.id}`, 20, 60 * 60_000);
-  if (!limit.ok) go("/marshmallow", `操作太频繁，请 ${limit.retryAfter} 秒后再试`);
+  if (!limit.ok) go("/me/submissions", `操作太频繁，请 ${limit.retryAfter} 秒后再试`);
   try { await updateOwnUnreadMarshmallow(user.id, id, parsed.data); }
-  catch (error) { go("/marshmallow", error instanceof Error ? error.message : "修改失败"); }
-  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
-  go("/marshmallow", "已修改，排队时间不变", "success");
+  catch (error) { go("/me/submissions", error instanceof Error ? error.message : "修改失败"); }
+  revalidatePath("/me/submissions"); revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go("/me/submissions", "已修改，排队时间不变", "success");
 }
 
 export async function deleteOwnMarshmallowAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser(); const id = marshmallowId(form);
-  if (!id) go("/marshmallow", "棉花糖编号无效");
+  if (!id) go("/me/submissions", "棉花糖编号无效");
   try { await deleteOwnUnreadMarshmallow(user.id, id); }
-  catch (error) { go("/marshmallow", error instanceof Error ? error.message : "删除失败"); }
-  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
-  go("/marshmallow", "棉花糖已删除", "success");
+  catch (error) { go("/me/submissions", error instanceof Error ? error.message : "删除失败"); }
+  revalidatePath("/me/submissions"); revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go("/me/submissions", "棉花糖已删除", "success");
 }
 
 export async function saveSubmissionReviewAction(form: FormData) {

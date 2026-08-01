@@ -30,7 +30,7 @@ export function ConfirmSubmit({
     </button>
     {open ? <div className="confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
-        <span className="confirm-mark" aria-hidden="true">!</span>
+        <span className="confirm-mark" aria-hidden="true"><X /></span>
         <h2 id={titleId}>{title}</h2>
         <p>{description}</p>
         <div className="form-actions">

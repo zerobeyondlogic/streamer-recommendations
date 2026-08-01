@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Eye, MailOpen } from "lucide-react";
+import { ArrowDown, ArrowUp, Cloud, Eye, MailOpen } from "lucide-react";
 import { deleteMarshmallowAction, readMarshmallowAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -23,14 +23,14 @@ export function MarshmallowStage({ current, previousId, nextId }: { current: Sta
   return <div className="marshmallow-stage-workspace">
     <section className={`marshmallow-capture panel ${displayed ? "is-live" : ""}`} aria-live="polite">
       {displayed ? <>
-        <span className="marshmallow-cloud" aria-hidden="true">☁</span>
+        <Cloud className="marshmallow-cloud" aria-hidden="true"/>
         <BvText className="marshmallow-capture-copy">{current.content}</BvText>
         <form action={readMarshmallowAction}>
           <input name="marshmallowId" type="hidden" value={current.id}/>
           {nextId ? <input name="nextId" type="hidden" value={nextId}/> : null}
           <button className="button primary marshmallow-read-button" type="submit"><MailOpen aria-hidden="true"/> 已读</button>
         </form>
-      </> : <div className="marshmallow-stage-placeholder"><span aria-hidden="true">☁︎</span><strong>等待展示</strong><small>点击右侧“展示”。</small></div>}
+      </> : <div className="marshmallow-stage-placeholder"><Cloud aria-hidden="true"/><strong>等待展示</strong><small>点击右侧“展示”。</small></div>}
     </section>
 
     <aside className="marshmallow-candidate-rail" aria-label="待展示棉花糖">

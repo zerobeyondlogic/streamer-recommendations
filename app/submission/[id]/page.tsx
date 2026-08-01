@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MessageCircle, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Cloud, MessageCircle, ThumbsDown, ThumbsUp } from "lucide-react";
 import { z } from "zod";
 import { deleteSubmissionReviewAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
@@ -55,7 +55,7 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
         <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
         <footer>评价于 {formatDate(review.updatedAt)}</footer>
       </article>)}</div>
-      {!reviews.length ? <div className="empty-state"><span>☁︎</span><h3>还没有评论</h3></div> : null}
+      {!reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
       {(reviewPage > 1 || reviewHasMore) ? <nav className="marshmallow-pagination" aria-label="评论分页">{reviewPage > 1 ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage - 1}#comments`}>← 上一页</Link> : <span/>}<strong>第 {reviewPage} 页</strong>{reviewHasMore ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage + 1}#comments`}>下一页 →</Link> : <span/>}</nav> : null}
     </section>
   </div>;

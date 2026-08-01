@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Eye, RotateCcw } from "lucide-react";
+import { Cloud, Eye, RotateCcw } from "lucide-react";
 import { deleteMarshmallowAction, restoreMarshmallowAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -32,6 +32,6 @@ export default async function MarshmallowManagerPage({ searchParams }: { searchP
         {item.deletedAt ? <form action={restoreMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><input name="returnTo" type="hidden" value={returnTo}/><button className="button small ghost" type="submit"><RotateCcw aria-hidden="true"/> 恢复</button></form> : <form action={deleteMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><input name="returnTo" type="hidden" value={returnTo}/><ConfirmSubmit/></form>}
       </div>
     </article>)}</div>
-    {!items.length ? <div className="empty-state"><span>☁︎</span><h3>暂无棉花糖</h3></div> : null}
+    {!items.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>暂无棉花糖</h3></div> : null}
   </>;
 }

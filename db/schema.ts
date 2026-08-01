@@ -144,7 +144,7 @@ export const notifications = pgTable("notifications", {
 
 export const siteSettings = pgTable("site_settings", {
   id: text("id").primaryKey().default("default"),
-  siteName: text("site_name").notNull().default("神绮爱的作品放映室"),
+  siteName: text("site_name").notNull().default("神绮爱的宝箱"),
   siteTagline: text("site_tagline").notNull().default("书籍、漫画、电影、动漫和游戏都可以投稿。"),
   backgroundType: text("background_type", { enum: ["built_in", "custom"] }).notNull().default("built_in"),
   backgroundImageUrl: text("background_image_url"),
