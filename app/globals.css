@@ -350,5 +350,13 @@ html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"]
 html[data-color-mode="dark"] .collection-food .collection-hero{background:linear-gradient(135deg,rgb(33 30 28/.78),color-mix(in srgb,var(--color-accent) 10%,rgb(24 23 32/.72)))}
 html[data-color-mode="dark"] .collection-wish .collection-hero{background:linear-gradient(135deg,rgb(32 30 41/.78),color-mix(in srgb,var(--color-primary) 13%,rgb(24 23 32/.72)))}
 
+/* Align the marshmallow composer with the full-width hero capsule. */
+.marshmallow-page .marshmallow-compose{width:100%;max-width:none;margin-inline:0}
+
+/* Public hero capsules use the same quiet translucent surface as content cards. */
+.collection-work .hero,.collection-hero,.collection-food .collection-hero,.collection-wish .collection-hero,.page-shell.marshmallow-page .marshmallow-hero{border-color:rgb(106 85 72/.12);background:rgb(255 255 255/var(--card-opacity));backdrop-filter:blur(14px)}
+.collection-work .hero::before,.collection-work .hero::after,.collection-hero::after{display:none}
+html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"] .collection-hero,html[data-color-mode="dark"] .collection-food .collection-hero,html[data-color-mode="dark"] .collection-wish .collection-hero,html[data-color-mode="dark"] .page-shell.marshmallow-page .marshmallow-hero{border-color:var(--line);background:var(--surface)}
+
 @media(max-width:860px){.hero-media{min-height:300px}.recommendation-hero-editor{grid-template-columns:1fr 1fr}.recommendation-hero-actions{grid-column:1/-1;grid-template-columns:1fr auto}.recommendation-hero-actions .button{width:100%}}
 @media(max-width:600px){.hero-media{min-height:250px}.recommendation-hero-editor{grid-template-columns:1fr;padding:20px}.recommendation-hero-preview{min-height:170px}.recommendation-hero-actions{grid-column:auto;grid-template-columns:1fr}.recommendation-hero-actions .button{width:100%}}
