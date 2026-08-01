@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Cloud, Sparkles, ThumbsUp, Utensils } from "lucide-react";
+import { BookOpen, Cloud, Sparkles, ThumbsUp, Utensils } from "lucide-react";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { FilterSelect } from "@/components/filter-select";
@@ -56,6 +56,7 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
 
   return <div className={`page-shell collection-page collection-${kind}`}>
     {kind === "work" ? <section className="hero">
+      <div className="collection-hero-mark recommendation-hero-mark" aria-hidden="true"><BookOpen/></div>
       <div className="hero-copy"><span className="eyebrow">{pageCopy.eyebrow}</span><h1>{siteCopy.recommendationHeroTitle}<em>{siteCopy.recommendationHeroAccent}</em></h1><p>{pageCopy.description}</p><div className="hero-actions"><Link className="button primary" href="/submit">{pageCopy.submit} <span>→</span></Link><a className="button ghost" href="#feed">浏览推荐单</a></div></div>
       <div className={`hero-media${heroImageUrl ? " has-image" : ""}`} aria-hidden="true" style={heroImageUrl ? { backgroundImage: `url("${heroImageUrl}")` } : undefined}/>
     </section> : <section className="collection-hero">

@@ -34,13 +34,12 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
     <Link className="back-link" href={backPath}>← 返回{kind === "food" ? "美食家" : kind === "wish" ? "许愿箱" : "推荐单"}</Link>
     <Notice>{messages.error}</Notice><Notice type="success">{messages.success}</Notice>
     <article className="panel public-submission-detail">
-      <div className="card-top"><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.pinnedAt ? <span className="pin">置顶</span> : null}{isHostRecommended ? <span className="host-badge">{kind === "wish" ? item.source === "host" ? "直播预告" : "预定要做" : item.source === "host" ? "神绮爱原创" : "神绮爱推荐"}</span> : null}<span className="status">{contentStatusLabel(item.category, item.contentStatus)}</span></div>
+      <div className="card-top"><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.pinnedAt ? <span className="pin">置顶</span> : null}{isHostRecommended ? <span className="host-badge">{kind === "wish" ? item.source === "host" ? "直播预告" : "预定要做" : item.source === "host" ? "神绮爱原创" : "神绮爱推荐"}</span> : null}<span className="detail-card-actions">{isAuthor ? <Link className="author-edit-icon" href={`/me/submissions#submission-${item.id}`} aria-label="编辑我的内容" title="编辑我的内容"><Pencil aria-hidden="true"/></Link> : null}<span className="status">{contentStatusLabel(item.category, item.contentStatus)}</span></span></div>
       <div className="detail-title-row"><div><h1>{item.title}</h1><p>{item.source === "host" ? kind === "wish" ? "由神绮爱发布" : "由神绮爱撰写" : `由 ${item.submitter} ${kind === "wish" ? "许愿" : "推荐"}`} · 公开于 {formatDate(item.publishedAt)}</p></div>{item.score && kind !== "wish" ? <span className="score"><b>{item.score}</b><small>/10</small></span> : null}</div>
       {item.description ? <p className="description detail-description"><BvText>{item.description}</BvText></p> : <p className="description muted">{kind === "wish" ? "没有补充愿望说明。" : "暂无推荐理由。"}</p>}
       {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
       {item.pinNote ? <div className="pin-note"><strong>{kind === "wish" ? "预定说明" : "神绮爱推荐语"}</strong><BvText>{item.pinNote}</BvText></div> : null}
       {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>{kind === "wish" ? "神绮爱回应" : kind === "food" ? "神绮爱试吃感想" : "神绮爱感想"}</strong></div><p><BvText>{item.reply}</BvText></p><time>记录于 {formatDate(item.replyPublishedAt)}</time></div> : null}
-      {isAuthor ? <Link className="button small ghost author-edit-link" href={`/me/submissions#submission-${item.id}`}><Pencil aria-hidden="true"/>编辑我的内容</Link> : null}
     </article>
 
     <section className="community-review-summary panel" aria-labelledby="community-review-title">
