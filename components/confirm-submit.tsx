@@ -6,12 +6,14 @@ import { X } from "lucide-react";
 export function ConfirmSubmit({
   label = "移除",
   title = "确认移除这颗棉花糖？",
-  description = "移除后不会公开，也不会再出现在展示队列中；之后仍可在“已移除”列表恢复。",
+  description = "移出展示队列，之后可恢复。",
+  confirmLabel = "确认移除",
   compact = false,
 }: {
   label?: string;
   title?: string;
   description?: string;
+  confirmLabel?: string;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -33,7 +35,7 @@ export function ConfirmSubmit({
         <p>{description}</p>
         <div className="form-actions">
           <button className="button ghost" type="button" ref={cancelRef} onClick={() => setOpen(false)}>取消</button>
-          <button className="button danger" type="submit">确认移除</button>
+          <button className="button danger" type="submit">{confirmLabel}</button>
         </div>
       </section>
     </div> : null}

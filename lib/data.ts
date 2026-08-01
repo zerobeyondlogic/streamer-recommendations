@@ -108,6 +108,37 @@ export async function createMarshmallow(userId: string, data: { content: string;
   return row;
 }
 
+export async function getMyMarshmallows(userId: string, page = 1) {
+  const safePage = Math.max(1, page);
+  const rows = await getDb().select({
+    id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic,
+    readAt: marshmallows.readAt, publishedAt: marshmallows.publishedAt, deletedAt: marshmallows.deletedAt,
+    createdAt: marshmallows.createdAt, updatedAt: marshmallows.updatedAt,
+  }).from(marshmallows).where(eq(marshmallows.userId, userId))
+    .orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(51).offset((safePage - 1) * 50);
+  return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
+}
+
+export async function updateOwnUnreadMarshmallow(userId: string, marshmallowId: string, data: { content: string; allowPublic: boolean }) {
+  await getDb().transaction(async (tx) => {
+    const rows = await tx.update(marshmallows).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(marshmallows.id, marshmallowId), eq(marshmallows.userId, userId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt)))
+      .returning({ id: marshmallows.id });
+    if (!rows.length) throw new Error("这颗棉花糖已处理，不能再修改");
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: "marshmallow_updated_by_author", metadata: { marshmallowId, allowPublic: data.allowPublic } });
+  });
+}
+
+export async function deleteOwnUnreadMarshmallow(userId: string, marshmallowId: string) {
+  await getDb().transaction(async (tx) => {
+    const rows = await tx.delete(marshmallows)
+      .where(and(eq(marshmallows.id, marshmallowId), eq(marshmallows.userId, userId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt)))
+      .returning({ id: marshmallows.id });
+    if (!rows.length) throw new Error("这颗棉花糖已处理，不能删除");
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: "marshmallow_deleted_by_author", metadata: { marshmallowId } });
+  });
+}
+
 export async function getPublicMarshmallows(page = 1) {
   const safePage = Math.max(1, page);
   const rows = await getDb().select({

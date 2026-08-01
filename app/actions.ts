@@ -9,8 +9,8 @@ import { getDb } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateScore, updateSettings,
+  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
@@ -71,6 +71,11 @@ export async function submitAction(form: FormData) {
   go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
 }
 
+const marshmallowId = (form: FormData) => {
+  const parsed = z.uuid().safeParse(value(form, "marshmallowId"));
+  return parsed.success ? parsed.data : null;
+};
+
 export async function submitMarshmallowAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
@@ -80,7 +85,29 @@ export async function submitMarshmallowAction(form: FormData) {
   if (!parsed.success) go("/marshmallow", parsed.error.issues[0]?.message ?? "棉花糖内容有误");
   await createMarshmallow(user.id, parsed.data);
   revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
-  go("/marshmallow", "棉花糖已送达神绮爱，暂时不会公开", "success");
+  go("/marshmallow", "棉花糖已送达", "success");
+}
+
+export async function updateOwnMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser(); const id = marshmallowId(form);
+  if (!id) go("/marshmallow", "棉花糖编号无效");
+  const parsed = marshmallowSchema.safeParse({ content: value(form, "content"), allowPublic: form.get("allowPublic") === "on" });
+  if (!parsed.success) go("/marshmallow", parsed.error.issues[0]?.message ?? "内容有误");
+  const limit = consumeRateLimit(`marshmallow-edit:${user.id}`, 20, 60 * 60_000);
+  if (!limit.ok) go("/marshmallow", `操作太频繁，请 ${limit.retryAfter} 秒后再试`);
+  try { await updateOwnUnreadMarshmallow(user.id, id, parsed.data); }
+  catch (error) { go("/marshmallow", error instanceof Error ? error.message : "修改失败"); }
+  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go("/marshmallow", "已修改，排队时间不变", "success");
+}
+
+export async function deleteOwnMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser(); const id = marshmallowId(form);
+  if (!id) go("/marshmallow", "棉花糖编号无效");
+  try { await deleteOwnUnreadMarshmallow(user.id, id); }
+  catch (error) { go("/marshmallow", error instanceof Error ? error.message : "删除失败"); }
+  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  go("/marshmallow", "棉花糖已删除", "success");
 }
 
 export async function saveSubmissionReviewAction(form: FormData) {
@@ -107,11 +134,6 @@ export async function deleteSubmissionReviewAction(form: FormData) {
   revalidatePath("/"); revalidatePath(returnTo);
   go(returnTo, "你的评价已撤回", "success");
 }
-
-const marshmallowId = (form: FormData) => {
-  const parsed = z.uuid().safeParse(value(form, "marshmallowId"));
-  return parsed.success ? parsed.data : null;
-};
 
 function safeMarshmallowReturnPath(form: FormData, fallback = "/host/marshmallows") {
   const candidate = value(form, "returnTo");

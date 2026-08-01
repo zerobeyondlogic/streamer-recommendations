@@ -31,21 +31,21 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
     <article className="panel public-submission-detail">
       <div className="card-top"><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.pinnedAt ? <span className="pin">置顶</span> : null}{isHostRecommended ? <span className="host-badge">{item.source === "host" ? "神绮爱原创" : "神绮爱推荐"}</span> : null}<span className="status">{contentStatusLabel(item.category, item.contentStatus)}</span></div>
       <div className="detail-title-row"><div><h1>{item.title}</h1><p>{item.source === "host" ? "由神绮爱撰写推荐" : `由 ${item.submitter} 推荐`} · 公开于 {formatDate(item.publishedAt)}</p></div>{item.score ? <span className="score"><b>{item.score}</b><small>/10</small></span> : null}</div>
-      {item.description ? <p className="description detail-description"><BvText>{item.description}</BvText></p> : <p className="description muted">投稿者暂时没有填写推荐理由。</p>}
+      {item.description ? <p className="description detail-description"><BvText>{item.description}</BvText></p> : <p className="description muted">暂无推荐理由。</p>}
       {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
       {item.pinNote ? <div className="pin-note"><strong>神绮爱推荐语</strong><BvText>{item.pinNote}</BvText></div> : null}
       {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>神绮爱感想</strong></div><p><BvText>{item.reply}</BvText></p><time>记录于 {formatDate(item.replyPublishedAt)}</time></div> : null}
     </article>
 
     <section className="community-review-summary panel" aria-labelledby="community-review-title">
-      <div><span className="eyebrow">Community score</span><h2 id="community-review-title">大家体验后的推荐</h2><p>每个账号只能保留一票；净推荐数 = 推荐 − 不推荐。</p></div>
+      <div><span className="eyebrow">Community score</span><h2 id="community-review-title">大家的推荐</h2><p>每个账号一票；净推荐数 = 推荐 − 不推荐。</p></div>
       <div className={`community-score-large ${item.communityScore < 0 ? "is-negative" : ""}`}><ThumbsUp aria-hidden="true"/><strong>{item.communityScore > 0 ? `+${item.communityScore}` : item.communityScore}</strong><span>净推荐数</span></div>
       <div className="community-breakdown"><span><ThumbsUp aria-hidden="true"/>{item.recommendCount} 人推荐</span><span><ThumbsDown aria-hidden="true"/>{item.notRecommendCount} 人不推荐</span></div>
     </section>
 
     <section className="review-compose-section">
       <div className="section-heading"><div><span className="eyebrow">Your review</span><h2>写下你的评价</h2></div>{ownReview ? <form action={deleteSubmissionReviewAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit">撤回我的评价</button></form> : null}</div>
-      {user ? <ReviewEditor submissionId={item.id} initial={ownReview}/> : <div className="panel review-login-callout"><p>登录后，玩过、读过或看过这部作品的用户可以选择推荐或不推荐，并留下评论。</p><Link className="button primary" href="/login">登录后评价</Link></div>}
+      {user ? <ReviewEditor submissionId={item.id} initial={ownReview}/> : <div className="panel review-login-callout"><p>登录后即可推荐并评论。</p><Link className="button primary" href="/login">登录评价</Link></div>}
     </section>
 
     <section className="community-comments" id="comments" aria-labelledby="community-comments-title">
@@ -55,7 +55,7 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
         <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
         <footer>评价于 {formatDate(review.updatedAt)}</footer>
       </article>)}</div>
-      {!reviews.length ? <div className="empty-state"><span>☁︎</span><h3>还没有文字评论</h3><p>可以只投推荐票，也可以成为第一个写评论的人。</p></div> : null}
+      {!reviews.length ? <div className="empty-state"><span>☁︎</span><h3>还没有评论</h3></div> : null}
       {(reviewPage > 1 || reviewHasMore) ? <nav className="marshmallow-pagination" aria-label="评论分页">{reviewPage > 1 ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage - 1}#comments`}>← 上一页</Link> : <span/>}<strong>第 {reviewPage} 页</strong>{reviewHasMore ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage + 1}#comments`}>下一页 →</Link> : <span/>}</nav> : null}
     </section>
   </div>;

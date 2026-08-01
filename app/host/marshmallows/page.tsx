@@ -20,7 +20,7 @@ export default async function MarshmallowManagerPage({ searchParams }: { searchP
   const items = await getHostMarshmallows(status);
   const returnTo = `/host/marshmallows?status=${status}`;
   return <>
-    <header className="host-heading"><div><span className="eyebrow">Marshmallow inbox</span><h1>棉花糖投稿管理</h1><p>打开列表、切换卡片或跳过都不会标记已读，也不会公开。只有展示台中的“已读”按钮会完成处理。</p></div><Link className="button primary" href="/host/marshmallows/stage"><Eye aria-hidden="true"/> 进入展示台</Link></header>
+    <header className="host-heading"><div><span className="eyebrow">Marshmallow inbox</span><h1>棉花糖管理</h1><p>只有点击“已读”才会完成处理。</p></div><Link className="button primary" href="/host/marshmallows/stage"><Eye aria-hidden="true"/> 展示台</Link></header>
     <Notice>{params.error}</Notice><Notice type="success">{params.success}</Notice>
     <nav className="marshmallow-status-tabs" aria-label="棉花糖状态筛选">{statuses.map((item) => <Link className={status === item.value ? "is-active" : ""} href={`/host/marshmallows?status=${item.value}`} key={item.value}>{item.label}</Link>)}</nav>
     <div className="marshmallow-manager-list">{items.map((item) => <article className={`panel marshmallow-manager-card ${item.deletedAt ? "is-deleted" : ""}`} key={item.id}>
@@ -32,6 +32,6 @@ export default async function MarshmallowManagerPage({ searchParams }: { searchP
         {item.deletedAt ? <form action={restoreMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><input name="returnTo" type="hidden" value={returnTo}/><button className="button small ghost" type="submit"><RotateCcw aria-hidden="true"/> 恢复</button></form> : <form action={deleteMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><input name="returnTo" type="hidden" value={returnTo}/><ConfirmSubmit/></form>}
       </div>
     </article>)}</div>
-    {!items.length ? <div className="empty-state"><span>☁︎</span><h3>这里暂时没有棉花糖</h3><p>切换其他状态看看，或者等待新的投递。</p></div> : null}
+    {!items.length ? <div className="empty-state"><span>☁︎</span><h3>暂无棉花糖</h3></div> : null}
   </>;
 }

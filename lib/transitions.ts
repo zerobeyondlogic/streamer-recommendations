@@ -15,3 +15,7 @@ export function pinSortKey(pinnedAt: Date | null, feedActivityAt: Date | null) {
 export function marshmallowReadPatch(allowPublic: boolean, now: Date) {
   return { readAt: now, publishedAt: allowPublic ? now : null, updatedAt: now };
 }
+
+export function canAuthorEditMarshmallow(readAt: Date | null, deletedAt: Date | null) {
+  return readAt === null && deletedAt === null;
+}

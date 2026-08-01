@@ -37,7 +37,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
       <div className="section-heading"><div><span className="eyebrow">{category ? `${categoryLabels[category]}专栏` : "首页 · 综合时间流"}</span><h2>{sectionTitle}</h2></div><span className="live-dot"><i /> 置顶始终优先</span></div>
       <MobileFilterDisclosure activeFilterCount={activeFilterCount}>
       <form className="filters feed-filters" action="/" method="get" data-testid="feed-filters">
-        <label>作品名称搜索<input name="q" defaultValue={q} placeholder="输入作品名称…" maxLength={100} /></label>
+        <label>作品名称<input name="q" defaultValue={q} placeholder="搜索作品…" maxLength={100} /></label>
         <FilterSelect name="category" label="分类" defaultValue={category ?? ""} options={[{ value: "", label: "首页 · 全部" }, ...categories.map((item) => ({ value: item, label: categoryLabels[item] }))]} />
         <FilterSelect name="status" label="作品状态" defaultValue={status} options={[{ value: "", label: "全部状态" }, ...contentStatuses.map((item) => ({ value: item, label: item === "pending" ? "待体验" : item === "in_progress" ? "进行中" : item === "completed" ? "已完成 / 已玩" : "已放弃" }))]} />
         <FilterSelect name="sort" label="排序" defaultValue={sort} options={[{ value: "time", label: "最近动态" }, { value: "score", label: "神绮爱评分" }, { value: "community", label: "社区推荐数" }]} />
@@ -51,15 +51,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           return <article className={`feed-card ${item.pinnedAt ? "is-pinned" : ""} ${item.source === "host" ? "is-host-authored" : ""}`} key={item.id} id={item.id}>
             <div className="card-top"><span className={`category category-${item.category}`}>{categoryLabels[item.category]}</span>{item.pinnedAt ? <span className="pin">置顶</span> : null}{isHostRecommended ? <span className="host-badge">{item.source === "host" ? "神绮爱原创" : "神绮爱推荐"}</span> : null}<span className="status">{contentStatusLabel(item.category, item.contentStatus)}</span></div>
             <div className="title-row"><h3><Link className="submission-title-link" href={`/submission/${item.id}`}>{item.title}</Link></h3>{item.score ? <span className="score"><b>{item.score}</b><small>/10</small></span> : null}</div>
-            {item.description ? <p className="description"><BvText>{item.description}</BvText></p> : <p className="description muted">投稿者暂时没有填写推荐理由。</p>}
+            {item.description ? <p className="description"><BvText>{item.description}</BvText></p> : <p className="description muted">暂无推荐理由。</p>}
             {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
             {item.pinNote ? <div className="pin-note"><strong>神绮爱推荐语</strong><BvText>{item.pinNote}</BvText></div> : null}
-            {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>神绮爱感想</strong></div><p><BvText>{item.reply}</BvText></p><time>记录于 {formatDate(item.replyPublishedAt)}</time></div> : <div className="waiting-reply">{item.source === "host" ? "神绮爱暂时还没写体验感想" : "神绮爱还在体验中，感想正在路上"}</div>}
+            {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>神绮爱感想</strong></div><p><BvText>{item.reply}</BvText></p><time>{formatDate(item.replyPublishedAt)}</time></div> : <div className="waiting-reply">暂无感想</div>}
             <footer><span>{item.source === "host" ? "由神绮爱撰写推荐" : `由 ${item.submitter} 推荐`}</span><span>最初记录于 {formatDate(item.createdAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span><Link className={`community-score-link ${item.communityScore < 0 ? "is-negative" : ""}`} href={`/submission/${item.id}`} aria-label={`查看作品详情，净推荐数 ${item.communityScore}`}><ThumbsUp aria-hidden="true"/><b>{item.communityScore > 0 ? `+${item.communityScore}` : item.communityScore}</b></Link></footer>
           </article>;
         })}
       </div>
-      {feed.length === 0 ? <div className="empty-state"><span>☁︎</span><h3>这里还很安静</h3><p>换个条件，或者成为第一个投递好作品的人吧。</p><Link className="button primary" href="/submit">去投稿</Link></div> : null}
+      {feed.length === 0 ? <div className="empty-state"><span>☁︎</span><h3>没有找到作品</h3><p>换个条件试试。</p><Link className="button primary" href="/submit">去投稿</Link></div> : null}
       {feed.length === 20 ? <div className="pagination"><Link className="button ghost" href={`/?${nextPage}`}>加载更多</Link></div> : null}
     </section>
   </div>;

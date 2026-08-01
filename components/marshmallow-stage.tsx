@@ -30,7 +30,7 @@ export function MarshmallowStage({ current, previousId, nextId }: { current: Sta
           {nextId ? <input name="nextId" type="hidden" value={nextId}/> : null}
           <button className="button primary marshmallow-read-button" type="submit"><MailOpen aria-hidden="true"/> 已读</button>
         </form>
-      </> : <div className="marshmallow-stage-placeholder"><span aria-hidden="true">☁︎</span><strong>展示区已准备好</strong><small>右侧内容不会出现在这里，直到你点击“展示”。</small></div>}
+      </> : <div className="marshmallow-stage-placeholder"><span aria-hidden="true">☁︎</span><strong>等待展示</strong><small>点击右侧“展示”。</small></div>}
     </section>
 
     <aside className="marshmallow-candidate-rail" aria-label="待展示棉花糖">

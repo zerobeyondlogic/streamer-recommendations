@@ -1,5 +1,5 @@
 import { describe,expect,it } from "vitest";
-import { firstOpenPatch,marshmallowReadPatch,pinSortKey,replyEffects } from "../lib/transitions";
+import { canAuthorEditMarshmallow,firstOpenPatch,marshmallowReadPatch,pinSortKey,replyEffects } from "../lib/transitions";
 
 describe("投稿与时间流事务规则",()=>{
   const now=new Date("2026-01-02T03:04:05.000Z");
@@ -11,4 +11,5 @@ describe("投稿与时间流事务规则",()=>{
   it("置顶排序键优先于普通活跃时间",()=>expect(pinSortKey(now,new Date("2020-01-01"))[0]).toBeGreaterThan(pinSortKey(null,new Date("2030-01-01"))[0]));
   it("允许公开的棉花糖只在已读时写入公开时间",()=>expect(marshmallowReadPatch(true,now)).toMatchObject({readAt:now,publishedAt:now}));
   it("私密棉花糖已读后仍不公开",()=>expect(marshmallowReadPatch(false,now)).toMatchObject({readAt:now,publishedAt:null}));
+  it("棉花糖只有未读且未移除时可由投稿者修改",()=>{expect(canAuthorEditMarshmallow(null,null)).toBe(true);expect(canAuthorEditMarshmallow(now,null)).toBe(false);expect(canAuthorEditMarshmallow(null,now)).toBe(false)});
 });
