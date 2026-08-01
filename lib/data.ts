@@ -181,10 +181,10 @@ export async function getMarshmallowStage(requestedId?: string) {
   const [previous] = await getDb().select({ id: marshmallows.id }).from(marshmallows)
     .where(and(...pending, or(lt(marshmallows.createdAt, current.createdAt), sameTimeBefore)))
     .orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(1);
-  const [next] = await getDb().select({ id: marshmallows.id }).from(marshmallows)
+  const [next] = await getDb().select(selection).from(marshmallows).innerJoin(users, eq(marshmallows.userId, users.id))
     .where(and(...pending, or(gt(marshmallows.createdAt, current.createdAt), sameTimeAfter)))
     .orderBy(asc(marshmallows.createdAt), asc(marshmallows.id)).limit(1);
-  return { current, previousId: previous?.id ?? null, nextId: next?.id ?? null };
+  return { current, previousId: previous?.id ?? null, nextId: next?.id ?? null, next: next ?? null };
 }
 
 export async function markMarshmallowRead(hostId: string, marshmallowId: string) {

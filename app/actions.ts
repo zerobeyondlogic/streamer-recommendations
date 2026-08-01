@@ -150,7 +150,7 @@ export async function readMarshmallowAction(form: FormData) {
   revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
   const next = z.uuid().safeParse(value(form, "nextId"));
   const target = next.success ? `/host/marshmallows/stage?id=${next.data}` : "/host/marshmallows/stage";
-  go(target, result.published ? "已读并公开到棉花糖墙" : "已读；这颗棉花糖保持私密", "success");
+  go(target, result.published ? "已公开上墙" : "已完成阅读，这颗棉花糖保持私密", "success");
 }
 
 export async function deleteMarshmallowAction(form: FormData) {
