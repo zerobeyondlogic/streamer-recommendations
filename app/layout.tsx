@@ -2,16 +2,17 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { Bell, BookOpen, Cloud, Film, Gamepad2, House, Images, LogIn, Sparkles, Tv, UserPlus } from "lucide-react";
+import { Bell, Cloud, LogIn, Sparkles, UserPlus } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
+import { MainNavigation } from "@/components/main-navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings, unreadNotificationCount } from "@/lib/data";
-import { categoryLabels, primaryCategories } from "@/lib/config";
+import { isAllowedBackgroundUrl } from "@/lib/security";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const h=await headers(); const host=h.get("x-forwarded-host")??h.get("host")??"localhost:3000"; const protocol=h.get("x-forwarded-proto")??(host.startsWith("localhost")?"http":"https");
-  return { metadataBase:new URL(`${protocol}://${host}`), title:{default:"神绮爱的宝箱",template:"%s · 神绮爱的宝箱"}, description:"向神绮爱推荐书籍、漫画、电影、动漫和游戏。", openGraph:{title:"神绮爱的宝箱",description:"把喜欢的作品推荐给神绮爱",images:[{url:"/og-v2.png",width:1200,height:630,alt:"神绮爱的宝箱"}]}, twitter:{card:"summary_large_image",images:["/og-v2.png"]} };
+  const [h, settings] = await Promise.all([headers(), getSettings()]); const host=h.get("x-forwarded-host")??h.get("host")??"localhost:3000"; const protocol=h.get("x-forwarded-proto")??(host.startsWith("localhost")?"http":"https");
+  return { metadataBase:new URL(`${protocol}://${host}`), title:{default:settings.siteName,template:`%s · ${settings.siteName}`}, description:settings.siteTagline, formatDetection:{telephone:false,date:false,email:false,address:false}, openGraph:{title:settings.siteName,description:settings.siteTagline,images:[{url:"/og-v2.png",width:1200,height:630,alt:settings.siteName}]}, twitter:{card:"summary_large_image",images:["/og-v2.png"]} };
 }
 
 export const dynamic = "force-dynamic";
@@ -20,29 +21,29 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const [settings, user] = await Promise.all([getSettings(), getCurrentUser()]);
   let unread = 0;
   if (user) try { unread = await unreadNotificationCount(user.id); } catch { unread = 0; }
+  const customBackgroundUrl = settings.backgroundType === "custom" && isAllowedBackgroundUrl(settings.backgroundImageUrl) ? settings.backgroundImageUrl : null;
   const style = {
     "--color-primary": settings.primaryColor, "--color-secondary": settings.secondaryColor,
     "--color-accent": settings.accentColor, "--color-background": settings.backgroundColor,
     "--card-opacity": settings.cardOpacity, "--background-overlay": settings.backgroundOverlay,
-    ...(settings.backgroundType === "custom" && settings.backgroundImageUrl ? { "--custom-background": `url(${settings.backgroundImageUrl})` } : {}),
+    ...(customBackgroundUrl ? { "--custom-background": `url("${customBackgroundUrl}")` } : {}),
   } as CSSProperties;
   return (
-    <html lang="zh-CN" style={style}>
-      <body className={settings.backgroundType === "custom" ? "has-custom-background" : `built-in-background ${settings.backgroundImageUrl?.startsWith("builtin:") ? settings.backgroundImageUrl.replace(":", "-") : "builtin-warm"}`}>
+    <html lang="zh-CN" style={style} suppressHydrationWarning>
+      <body suppressHydrationWarning className={customBackgroundUrl ? "has-custom-background" : `built-in-background ${settings.backgroundImageUrl?.startsWith("builtin:") ? settings.backgroundImageUrl.replace(":", "-") : "builtin-warm"}`}>
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">
           <nav className="nav-shell" aria-label="主导航">
             <div className="nav-top"><Link href="/" className="brand"><span className="brand-mark"><Sparkles aria-hidden="true"/></span><span>{settings.siteName}</span></Link>
             <div className="nav-links account-links">
-              <Link href="/marshmallow" className="marshmallow-nav-link" aria-label="棉花糖"><Cloud className="nav-icon" aria-hidden="true"/><span className="nav-action-label">棉花糖</span></Link>
               {user ? <Link href="/me/notifications" className="notification-link" aria-label={unread > 0 ? `消息，${unread} 条未读` : "消息"}><Bell className="nav-icon" aria-hidden="true"/><span className="nav-action-label">消息</span>{unread > 0 ? <span className="badge">{unread > 99 ? "99+" : unread}</span> : null}</Link> : null}
               {user ? <AccountMenu isHost={user.role === "host"}/> : <><Link href="/login" aria-label="登录"><LogIn className="nav-icon" aria-hidden="true"/><span className="nav-action-label">登录</span></Link><Link href="/register" className="nav-cta" aria-label="注册"><UserPlus className="nav-icon" aria-hidden="true"/><span className="nav-action-label">注册</span></Link></>}
             </div></div>
-            <div className="category-nav" aria-label="作品分类"><Link href="/"><House className="category-icon" aria-hidden="true"/><span>首页</span></Link>{primaryCategories.map((category) => { const Icon = category === "book" ? BookOpen : category === "manga" ? Images : category === "movie" ? Film : category === "anime" ? Tv : Gamepad2; return <Link href={`/?category=${category}`} key={category}><Icon className="category-icon" aria-hidden="true"/><span>{categoryLabels[category]}</span></Link>; })}</div>
+            <MainNavigation/>
           </nav>
         </header>
         <main>{children}</main>
-        <footer className="site-footer"><span>一起发现好作品</span><span className="footer-symbols" aria-hidden="true"><Cloud/><Sparkles/></span><span>个人非商业粉丝站</span></footer>
+        <footer className="site-footer"><span>一起发现喜欢的事</span><span className="footer-symbols" aria-hidden="true"><Cloud/><Sparkles/></span><span>个人非商业粉丝站</span></footer>
       </body>
     </html>
   );

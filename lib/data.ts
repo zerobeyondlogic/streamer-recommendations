@@ -1,9 +1,10 @@
 import "server-only";
-import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { cache } from "react";
 import { getDb } from "@/db";
-import { activityLogs, hostReplies, marshmallows, notifications, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
-import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort } from "./config";
-import { normalizeTitle, publicSubmitter } from "./security";
+import { activityLogs, hostReplies, marshmallows, notifications, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { MAX_PINNED_SUBMISSIONS, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
+import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects } from "./transitions";
 
 export const defaultSettings = {
@@ -12,15 +13,31 @@ export const defaultSettings = {
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
-export async function getSettings() {
+export const defaultSiteCopy = {
+  id: "default", recommendationHeroTitle: "把喜欢的作品，", recommendationHeroAccent: "推荐给神绮爱。", recommendationSectionTitle: "最近的作品推荐",
+  foodHeroTitle: "好吃的，当然要一起分享。", foodTagline: "推荐值得一吃的店铺、菜品和味道。", foodSectionTitle: "大家的美食推荐",
+  wishHeroTitle: "下一次直播，想和神绮爱做什么？", wishTagline: "许愿台词回读、一起看作品，或任何直播企划。", wishSectionTitle: "等待实现的愿望",
+  marshmallowHeroTitle: "给神绮爱一颗棉花糖", marshmallowTagline: "写下想说的话，默认仅神绮爱可见。", marshmallowSectionTitle: "已上墙的棉花糖",
+  updatedBy: null, updatedAt: new Date(0),
+};
+
+export const getSettings = cache(async function getSettings() {
   try { const [value] = await getDb().select().from(siteSettings).where(eq(siteSettings.id, "default")).limit(1); return value ?? defaultSettings; }
   catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) return defaultSettings; throw error; }
-}
+});
 
-export async function getPublicFeed(filters: { category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number } = {}) {
+export const getSiteCopy = cache(async function getSiteCopy() {
+  try { const [value] = await getDb().select().from(siteCopySettings).where(eq(siteCopySettings.id, "default")).limit(1); return value ?? defaultSiteCopy; }
+  catch (error) { if (String(error).includes("DATABASE_URL_MISSING") || String(error).includes("site_copy_settings")) return defaultSiteCopy; throw error; }
+});
+
+export async function getPublicFeed(filters: { kind?: SubmissionKind; category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number } = {}) {
   try {
     const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} then 1 else -1 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
     const conditions = [isNotNull(submissions.publishedAt), isNull(submissions.deletedAt)];
+    if (filters.kind === "work") conditions.push(notInArray(submissions.category, ["food", "wish"]));
+    if (filters.kind === "food") conditions.push(eq(submissions.category, "food"));
+    if (filters.kind === "wish") conditions.push(eq(submissions.category, "wish"));
     if (filters.category) conditions.push(eq(submissions.category, filters.category as Category));
     if (filters.status) conditions.push(eq(submissions.contentStatus, filters.status as ContentStatus));
     if (filters.q) conditions.push(ilike(submissions.normalizedTitle, `%${normalizeTitle(filters.q)}%`));
@@ -28,7 +45,7 @@ export async function getPublicFeed(filters: { category?: string; status?: strin
       const hostRecommended = or(eq(submissions.source, "host"), isNotNull(submissions.pinnedAt));
       if (hostRecommended) conditions.push(hostRecommended);
     }
-    const page = Math.max(1, filters.page ?? 1);
+    const page = safePageNumber(filters.page);
     const rows = await getDb().select({
       id: submissions.id, category: submissions.category, title: submissions.title, description: submissions.description,
       externalUrl: submissions.externalUrl, anonymousPublic: submissions.anonymousPublic, username: users.username,
@@ -42,6 +59,7 @@ export async function getPublicFeed(filters: { category?: string; status?: strin
       .orderBy(
         desc(sql`${submissions.pinnedAt} is not null`),
         desc(submissions.pinnedAt),
+        ...(filters.kind === "wish" ? [sql`case when ${submissions.contentStatus} = 'completed' then 1 else 0 end asc`] : []),
         ...(filters.sort === "score" ? [sql`${submissions.score} desc nulls last`, desc(submissions.feedActivityAt)] : filters.sort === "community" ? [desc(communityScore), desc(submissions.feedActivityAt)] : [desc(submissions.feedActivityAt)]),
       )
       .limit(20).offset((page - 1) * 20);
@@ -71,7 +89,7 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
   }).from(submissions).innerJoin(users, eq(submissions.userId, users.id)).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
     .where(and(eq(submissions.id, submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
   if (!item) return null;
-  const reviewPage = Math.max(1, requestedReviewPage);
+  const reviewPage = safePageNumber(requestedReviewPage);
   const reviewConditions = [eq(submissionReviews.submissionId, submissionId), isNotNull(submissionReviews.comment)];
   if (currentUserId) reviewConditions.push(ne(submissionReviews.userId, currentUserId));
   const [reviews, own] = await Promise.all([
@@ -90,7 +108,7 @@ export async function saveSubmissionReview(userId: string, data: { submissionId:
   return getDb().transaction(async (tx) => {
     const [submission] = await tx.select({ id: submissions.id }).from(submissions)
       .where(and(eq(submissions.id, data.submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
-    if (!submission) throw new Error("这个作品不存在或尚未公开");
+    if (!submission) throw new Error("这条内容不存在或尚未公开");
     const now = new Date();
     await tx.insert(submissionReviews).values({ userId, submissionId: data.submissionId, recommend: data.recommend, comment: data.comment, createdAt: now, updatedAt: now })
       .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { recommend: data.recommend, comment: data.comment, updatedAt: now } });
@@ -111,7 +129,7 @@ export async function createMarshmallow(userId: string, data: { content: string;
 }
 
 export async function getMyMarshmallows(userId: string, page = 1) {
-  const safePage = Math.max(1, page);
+  const safePage = safePageNumber(page);
   const rows = await getDb().select({
     id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic,
     readAt: marshmallows.readAt, publishedAt: marshmallows.publishedAt, deletedAt: marshmallows.deletedAt,
@@ -142,7 +160,7 @@ export async function deleteOwnUnreadMarshmallow(userId: string, marshmallowId: 
 }
 
 export async function getPublicMarshmallows(page = 1) {
-  const safePage = Math.max(1, page);
+  const safePage = safePageNumber(page);
   const rows = await getDb().select({
     id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt,
   }).from(marshmallows).where(and(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt)))
@@ -225,12 +243,13 @@ export async function createHostRecommendation(hostId: string, data: {
       if (total.value >= MAX_PINNED_SUBMISSIONS) throw new Error(`最多置顶 ${MAX_PINNED_SUBMISSIONS} 条`);
     }
     const now = new Date();
+    const isWish = data.category === "wish";
     const [row] = await tx.insert(submissions).values({
       userId: hostId, source: "host", category: data.category, title: data.title,
       normalizedTitle: normalizeTitle(data.title), description: data.description, externalUrl: data.externalUrl,
       anonymousPublic: false, hostReadAt: now, publishedAt: now, feedActivityAt: now,
-      contentStatus: "completed", contentCompletedAt: now,
-      score: data.score, pinnedAt: data.pin ? now : null, pinnedBy: data.pin ? hostId : null, pinNote: data.pin ? data.pinNote : null,
+      contentStatus: isWish ? "pending" : "completed", contentCompletedAt: isWish ? null : now,
+      score: isWish ? null : data.score, pinnedAt: data.pin ? now : null, pinnedBy: data.pin ? hostId : null, pinNote: data.pin ? data.pinNote : null,
     }).returning({ id: submissions.id });
     if (data.experience) await tx.insert(hostReplies).values({ submissionId: row.id, hostUserId: hostId, content: data.experience, publishedAt: now });
     await tx.insert(activityLogs).values({ actorUserId: hostId, submissionId: row.id, action: "host_recommendation_created", metadata: { pinned: data.pin, score: data.score } });
@@ -282,9 +301,12 @@ export async function getHostStats() {
   return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value];
 }
 
-export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; read?: string; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
+export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; kind?: SubmissionKind; read?: string; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
   const conditions = filters.view === "library" ? [isNotNull(submissions.publishedAt)] : [];
   if (filters.view === "inbox") conditions.push(eq(submissions.source, "user"));
+  if (filters.kind === "work") conditions.push(notInArray(submissions.category, ["food", "wish"]));
+  if (filters.kind === "food") conditions.push(eq(submissions.category, "food"));
+  if (filters.kind === "wish") conditions.push(eq(submissions.category, "wish"));
   if (filters.id) conditions.push(eq(submissions.id, filters.id));
   if (filters.read === "unread") conditions.push(isNull(submissions.hostReadAt));
   if (filters.read === "read") conditions.push(isNotNull(submissions.hostReadAt));
@@ -355,7 +377,7 @@ export async function setPinned(hostId: string, submissionId: string, pin: boole
 
 export async function saveHostReply(hostId: string, submissionId: string, content: string, republish = false, notifyAgain = false) {
   await getDb().transaction(async (tx) => {
-    const [submission] = await tx.select({ userId: submissions.userId, source: submissions.source }).from(submissions).where(and(eq(submissions.id, submissionId), isNull(submissions.deletedAt))).limit(1);
+    const [submission] = await tx.select({ userId: submissions.userId, source: submissions.source, category: submissions.category }).from(submissions).where(and(eq(submissions.id, submissionId), isNull(submissions.deletedAt))).limit(1);
     if (!submission) throw new Error("投稿不存在");
     const [existing] = await tx.select().from(hostReplies).where(eq(hostReplies.submissionId, submissionId)).limit(1);
     const now = new Date();
@@ -367,7 +389,10 @@ export async function saveHostReply(hostId: string, submissionId: string, conten
     } else {
       const [reply] = await tx.insert(hostReplies).values({ submissionId, hostUserId: hostId, content, publishedAt: now }).returning({ id: hostReplies.id });
       replyId = reply.id;
-      await tx.update(submissions).set({ contentStatus: "completed", contentCompletedAt: now, feedActivityAt: effects.feedActivityAt, updatedAt: now }).where(eq(submissions.id, submissionId));
+      await tx.update(submissions).set({
+        ...(submission.category === "wish" ? {} : { contentStatus: "completed" as const, contentCompletedAt: now }),
+        feedActivityAt: effects.feedActivityAt, updatedAt: now,
+      }).where(eq(submissions.id, submissionId));
       if (submission.source === "user") await tx.insert(notifications).values({ userId: submission.userId, type: "host_reply", submissionId, replyId });
     }
     if (existing && effects.feedActivityAt) {
@@ -385,6 +410,20 @@ export async function getPendingBilibiliUsers() {
   }).from(users).where(eq(users.status, "pending")).orderBy(desc(users.createdAt)).limit(200);
 }
 
+export async function getManagedUsers(filters: { status?: "pending" | "active" | "banned"; q?: string } = {}) {
+  const conditions: SQL[] = [];
+  if (filters.status) conditions.push(eq(users.status, filters.status));
+  if (filters.q) conditions.push(ilike(users.usernameNormalized, `%${filters.q.trim().toLocaleLowerCase("zh-CN")}%`));
+  const [totalRows, activeRows, pendingRows, items] = await Promise.all([
+    getDb().select({ value: count() }).from(users),
+    getDb().select({ value: count() }).from(users).where(eq(users.status, "active")),
+    getDb().select({ value: count() }).from(users).where(eq(users.status, "pending")),
+    getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, verificationCode: users.bilibiliVerificationCode, createdAt: users.createdAt })
+      .from(users).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(users.createdAt)).limit(300),
+  ]);
+  return { total: totalRows[0]?.value ?? 0, active: activeRows[0]?.value ?? 0, pending: pendingRows[0]?.value ?? 0, items };
+}
+
 export async function approveBilibiliUser(hostId: string, userId: string) {
   const approved = await getDb().update(users).set({ status: "active", bilibiliVerifiedAt: new Date(), bilibiliVerificationCode: null, updatedAt: new Date() })
     .where(and(eq(users.id, userId), eq(users.status, "pending"), isNotNull(users.bilibiliUid))).returning({ id: users.id });
@@ -397,4 +436,11 @@ export async function updateSettings(hostId: string, value: SettingsInput) {
   await getDb().insert(siteSettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
     .onConflictDoUpdate({ target: siteSettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_theme_updated" });
+}
+
+type SiteCopyInput = Omit<typeof defaultSiteCopy, "id" | "updatedBy" | "updatedAt">;
+export async function updateSiteCopy(hostId: string, value: SiteCopyInput) {
+  await getDb().insert(siteCopySettings).values({ id: "default", ...value, updatedBy: hostId, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: siteCopySettings.id, set: { ...value, updatedBy: hostId, updatedAt: new Date() } });
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "site_copy_updated" });
 }

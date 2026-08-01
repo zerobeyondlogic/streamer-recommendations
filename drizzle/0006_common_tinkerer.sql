@@ -1,0 +1,2 @@
+ALTER TABLE "submissions" DROP CONSTRAINT "submissions_category_check";--> statement-breakpoint
+ALTER TABLE "submissions" ADD CONSTRAINT "submissions_category_check" CHECK ("submissions"."category" in ('book','manga','movie','anime','game','other','food','wish'));

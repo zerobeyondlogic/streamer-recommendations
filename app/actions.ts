@@ -6,22 +6,23 @@ import { redirect } from "next/navigation";
 import { del, put } from "@vercel/blob";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { siteSettings } from "@/db/schema";
-import { getCurrentUser, login, logout, register, requireHost, requireUser } from "@/lib/auth";
+import { siteCopySettings, siteSettings } from "@/db/schema";
+import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, resetUserPassword } from "@/lib/auth";
 import {
   approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setPinned, softDelete, softDeleteMarshmallow, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { isSameOrigin } from "@/lib/security";
-import { contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
-import { contentStatuses } from "@/lib/config";
+import { isSameOrigin, safeLocalPath } from "@/lib/security";
+import { changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { categories, contentStatuses, submissionKind } from "@/lib/config";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
 function go(path: string, message: string, type: "error" | "success" = "error"): never {
-  const [pathname, fragment] = path.split("#", 2);
+  const [pathname, fragment] = safeLocalPath(path).split("#", 2);
   redirect(`${pathname}${pathname.includes("?") ? "&" : "?"}${type}=${encodeURIComponent(message)}${fragment ? `#${fragment}` : ""}`);
 }
+function revalidatePublicCollections() { revalidatePath("/"); revalidatePath("/food"); revalidatePath("/wishes"); }
 async function assertSameOrigin() {
   const h = await headers();
   const origin = h.get("origin");
@@ -47,26 +48,56 @@ export async function loginAction(form: FormData) {
   await assertSameOrigin();
   const limit = consumeRateLimit(await clientKey("login"), 10, 15 * 60_000);
   if (!limit.ok) go("/login", `尝试次数过多，请 ${limit.retryAfter} 秒后再试`);
+  let result: Awaited<ReturnType<typeof login>>;
   try {
-    const result = await login(value(form, "username"), value(form, "password"));
+    result = await login(value(form, "username"), value(form, "password"));
     if (!result.ok) go("/login", result.error);
   } catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) go("/login", "数据库尚未配置，请先完成部署设置"); throw error; }
+  if (result.mustChangePassword) redirect("/change-password");
   const user = await getCurrentUser();
   redirect(user?.role === "host" ? "/host" : "/");
 }
 
 export async function logoutAction() { await assertSameOrigin(); await logout(); redirect("/"); }
 
+export async function changeOneTimePasswordAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireAuthenticatedUser();
+  if (!user.mustChangePassword) redirect("/");
+  const parsed = changePasswordSchema.safeParse({ password: value(form, "password"), confirmPassword: value(form, "confirmPassword") });
+  if (!parsed.success) go("/change-password", parsed.error.issues[0]?.message ?? "新密码无效");
+  try { await replaceOneTimePassword(user.id, parsed.data.password); }
+  catch (error) { go("/change-password", error instanceof Error ? error.message : "密码更新失败"); }
+  await logout();
+  go("/login", "密码已更新，请使用新密码登录", "success");
+}
+
+export type ResetPasswordState = { error?: string; oneTimePassword?: string; username?: string };
+export async function resetUserPasswordAction(_state: ResetPasswordState, form: FormData): Promise<ResetPasswordState> {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const userId = z.uuid().safeParse(value(form, "userId"));
+  if (!userId.success) return { error: "用户编号无效" };
+  try {
+    const oneTimePassword = await resetUserPassword(host.id, userId.data);
+    return { oneTimePassword, username: value(form, "username") };
+  } catch (error) { return { error: error instanceof Error ? error.message : "重置失败" }; }
+}
+
 export async function submitAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
   const limit = consumeRateLimit(`submit:${user.id}`, 5, 60 * 60_000);
-  if (!limit.ok) go("/submit", `投稿有点快，请 ${limit.retryAfter} 秒后再试`);
+  const rawCategory = value(form, "category");
+  const validCategory = categories.includes(rawCategory as never) ? rawCategory as (typeof categories)[number] : "book";
+  const kind = submissionKind(validCategory);
+  const returnTo = kind === "work" ? "/submit" : `/submit?kind=${kind}`;
+  if (!limit.ok) go(returnTo, `投稿有点快，请 ${limit.retryAfter} 秒后再试`);
   const parsed = submissionSchema.safeParse({
-    category: value(form, "category"), title: value(form, "title"), description: value(form, "description"),
+    category: rawCategory, title: value(form, "title"), description: value(form, "description"),
     externalUrl: value(form, "externalUrl"), anonymousPublic: form.get("anonymousPublic") === "on",
   });
-  if (!parsed.success) go("/submit", parsed.error.issues[0]?.message ?? "投稿内容有误");
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "投稿内容有误");
   await createSubmission(user.id, parsed.data);
   revalidatePath("/me/submissions");
   go("/me/submissions", "投稿已送达神绮爱收件箱", "success");
@@ -74,6 +105,10 @@ export async function submitAction(form: FormData) {
 
 const marshmallowId = (form: FormData) => {
   const parsed = z.uuid().safeParse(value(form, "marshmallowId"));
+  return parsed.success ? parsed.data : null;
+};
+const submissionId = (form: FormData) => {
+  const parsed = z.uuid().safeParse(value(form, "submissionId"));
   return parsed.success ? parsed.data : null;
 };
 
@@ -121,7 +156,7 @@ export async function saveSubmissionReviewAction(form: FormData) {
   if (!limit.ok) go(returnTo, `评价操作有点快，请 ${limit.retryAfter} 秒后再试`);
   try { await saveSubmissionReview(user.id, { submissionId: parsed.data.submissionId, recommend: parsed.data.recommend === "recommend", comment: parsed.data.comment }); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "评价发布失败"); }
-  revalidatePath("/"); revalidatePath(returnTo);
+  revalidatePublicCollections(); revalidatePath(returnTo);
   go(`${returnTo}#comments`, "你的评价已保存", "success");
 }
 
@@ -129,10 +164,10 @@ export async function deleteSubmissionReviewAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const parsed = z.uuid().safeParse(value(form, "submissionId"));
   const returnTo = parsed.success ? `/submission/${parsed.data}` : "/";
-  if (!parsed.success) go(returnTo, "作品编号无效");
+  if (!parsed.success) go(returnTo, "内容编号无效");
   try { await deleteSubmissionReview(user.id, parsed.data); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "撤回失败"); }
-  revalidatePath("/"); revalidatePath(returnTo);
+  revalidatePublicCollections(); revalidatePath(returnTo);
   go(`${returnTo}#comments`, "你的评价已撤回", "success");
 }
 
@@ -181,17 +216,23 @@ export async function createHostRecommendationAction(form: FormData) {
     externalUrl: value(form, "externalUrl"), score: value(form, "score"),
     experience: value(form, "experience"), pin: form.get("pin") === "on", pinNote: value(form, "pinNote"),
   });
-  if (!parsed.success) go("/host/recommend", parsed.error.issues[0]?.message ?? "推荐内容有误");
+  const rawCategory = value(form, "category");
+  const validCategory = categories.includes(rawCategory as never) ? rawCategory as (typeof categories)[number] : "book";
+  const kind = submissionKind(validCategory);
+  const returnTo = kind === "work" ? "/host/recommend" : `/host/recommend?kind=${kind}`;
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "推荐内容有误");
   let row: Awaited<ReturnType<typeof createHostRecommendation>>;
   try { row = await createHostRecommendation(host.id, parsed.data); }
-  catch (error) { go("/host/recommend", error instanceof Error ? error.message : "发布失败"); }
-  revalidatePath("/"); revalidatePath("/host/library");
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "发布失败"); }
+  revalidatePublicCollections(); revalidatePath("/host/library");
   go(`/host/submission/${row.id}`, "神绮爱原创推荐已直接公开", "success");
 }
 
 export async function deleteOwnSubmissionAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
-  const ok = await deleteOwnUnreadSubmission(user.id, value(form, "submissionId"));
+  const id = submissionId(form);
+  if (!id) go("/me/submissions", "投稿编号无效");
+  const ok = await deleteOwnUnreadSubmission(user.id, id);
   revalidatePath("/me/submissions");
   if (!ok) go("/me/submissions", "只有神绮爱尚未查看的投稿可以撤回");
   go("/me/submissions", "投稿已撤回", "success");
@@ -205,28 +246,33 @@ export async function readNotificationAction(form: FormData) {
 export async function readAllNotificationsAction() { await assertSameOrigin(); const user = await requireUser(); await markAllNotificationsRead(user.id); revalidatePath("/me/notifications"); go("/me/notifications", "全部消息已标记为已读", "success"); }
 
 export async function openSubmissionAction(form: FormData) {
-  await assertSameOrigin(); const host = await requireHost(); const id = value(form, "submissionId");
-  await markReadAndPublish(host.id, id); revalidatePath("/"); revalidatePath("/host/inbox"); redirect(`/host/submission/${id}`);
+  await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form);
+  if (!id) go("/host/inbox", "投稿编号无效");
+  await markReadAndPublish(host.id, id); revalidatePublicCollections(); revalidatePath("/host/inbox"); redirect(`/host/submission/${id}`);
 }
 
-export async function softDeleteAction(form: FormData) { await assertSameOrigin(); const host = await requireHost(); await softDelete(host.id, value(form, "submissionId")); revalidatePath("/"); revalidatePath("/host"); go(value(form, "returnTo") || "/host/inbox", "投稿已删除，可在当前列表中恢复", "success"); }
-export async function restoreAction(form: FormData) { await assertSameOrigin(); const host = await requireHost(); await restoreSubmission(host.id, value(form, "submissionId")); revalidatePath("/"); revalidatePath("/host"); go(value(form, "returnTo") || "/host/library", "投稿已恢复", "success"); }
+export async function softDeleteAction(form: FormData) { await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form); if (!id) go("/host/inbox", "投稿编号无效"); await softDelete(host.id, id); revalidatePublicCollections(); revalidatePath("/host"); go(value(form, "returnTo") || "/host/inbox", "投稿已删除，可在当前列表中恢复", "success"); }
+export async function restoreAction(form: FormData) { await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form); if (!id) go("/host/library", "投稿编号无效"); await restoreSubmission(host.id, id); revalidatePublicCollections(); revalidatePath("/host"); go(value(form, "returnTo") || "/host/library", "投稿已恢复", "success"); }
 
 export async function statusAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const status = value(form, "contentStatus");
+  const id = submissionId(form);
+  if (!id) go("/host/library", "投稿编号无效");
   if (!contentStatuses.includes(status as never)) go(value(form, "returnTo") || "/host/library", "作品状态无效");
-  await updateContentStatus(host.id, value(form, "submissionId"), status as (typeof contentStatuses)[number]);
-  revalidatePath("/"); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", "作品状态已更新", "success");
+  await updateContentStatus(host.id, id, status as (typeof contentStatuses)[number]);
+  revalidatePublicCollections(); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", "状态已更新", "success");
 }
 
 export async function scoreAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost();
+  const id = submissionId(form);
   const parsed = scoreSchema.safeParse(value(form, "score"));
   const returnTo = value(form, "returnTo") || "/host/library";
+  if (!id) go(returnTo, "投稿编号无效");
   if (!parsed.success) go(returnTo, "评分必须是 1～10 的整数");
-  try { await updateScore(host.id, value(form, "submissionId"), parsed.data); }
+  try { await updateScore(host.id, id, parsed.data); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "评分失败"); }
-  revalidatePath("/"); revalidatePath("/host/library"); go(returnTo, parsed.data ? `已评分 ${parsed.data}/10` : "已清除评分", "success");
+  revalidatePublicCollections(); revalidatePath("/host/library"); go(returnTo, parsed.data ? `已评分 ${parsed.data}/10` : "已清除评分", "success");
 }
 
 export async function approveBilibiliUserAction(form: FormData) {
@@ -241,7 +287,7 @@ export async function pinAction(form: FormData) {
   if (!parsed.success) go("/host/library", "置顶信息无效");
   try { await setPinned(host.id, parsed.data.submissionId, value(form, "pin") === "true", parsed.data.pinNote); }
   catch (error) { go(value(form, "returnTo") || "/host/library", error instanceof Error ? error.message : "置顶失败"); }
-  revalidatePath("/"); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", value(form, "pin") === "true" ? "已置顶" : "已取消置顶", "success");
+  revalidatePublicCollections(); revalidatePath("/host/library"); go(value(form, "returnTo") || "/host/library", value(form, "pin") === "true" ? "已置顶" : "已取消置顶", "success");
 }
 
 export async function replyAction(form: FormData) {
@@ -250,7 +296,7 @@ export async function replyAction(form: FormData) {
   });
   if (!parsed.success || !parsed.data.reply) go(`/host/submission/${value(form, "submissionId")}`, parsed.error?.issues[0]?.message ?? "请填写感想");
   await saveHostReply(host.id, parsed.data.submissionId, parsed.data.reply, parsed.data.republish, parsed.data.notifyAgain);
-  revalidatePath("/"); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "神绮爱感想已保存", "success");
+  revalidatePublicCollections(); revalidatePath("/host/library"); go(`/host/submission/${parsed.data.submissionId}`, "内容已保存", "success");
 }
 
 export async function themeAction(form: FormData) {
@@ -262,10 +308,20 @@ export async function themeAction(form: FormData) {
   revalidatePath("/", "layout"); go("/host/theme", "主题已保存", "success");
 }
 
+export async function siteCopyAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  const parsed = siteCopySchema.safeParse(Object.fromEntries(form.entries()));
+  if (!parsed.success) go("/host/theme", parsed.error.issues[0]?.message ?? "页面文案无效");
+  await updateSiteCopy(host.id, parsed.data);
+  revalidatePath("/", "layout"); revalidatePath("/food"); revalidatePath("/wishes"); revalidatePath("/marshmallow");
+  go("/host/theme", "页面文案已保存", "success");
+}
+
 export async function resetThemeAction() {
   await assertSameOrigin(); const host = await requireHost();
   const current=await getSettings();
   await getDb().delete(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default"));
+  await getDb().delete(siteCopySettings).where((await import("drizzle-orm")).eq(siteCopySettings.id, "default"));
   if(current.backgroundType==="custom"&&current.backgroundImageUrl&&process.env.BLOB_READ_WRITE_TOKEN)await del(current.backgroundImageUrl).catch(()=>undefined);
   revalidatePath("/", "layout"); go("/host/theme", `已恢复默认主题（由 ${host.username} 操作）`, "success");
 }

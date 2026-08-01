@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categories, contentStatuses } from "./config";
+import { isAllowedBackgroundUrl } from "./security";
 import { hasBalancedSpoilers } from "./spoilers";
 
 const text = (max: number) => z.string().trim().max(max);
@@ -8,10 +9,14 @@ export const passwordSchema = z.string().min(8, "密码至少 8 位").max(128, "
 export const bilibiliUidSchema = z.string().trim().regex(/^[1-9]\d{0,19}$/, "请输入正确的 B 站数字 UID");
 export const authSchema = z.object({ username: usernameSchema, password: passwordSchema });
 export const registrationSchema = authSchema.extend({ bilibiliUid: bilibiliUidSchema });
+export const changePasswordSchema = z.object({
+  password: passwordSchema,
+  confirmPassword: z.string(),
+}).refine((value) => value.password === value.confirmPassword, { message: "两次输入的密码不一致", path: ["confirmPassword"] });
 
 export const submissionSchema = z.object({
   category: z.enum(categories),
-  title: text(100).min(1, "请填写作品名称"),
+  title: text(100).min(1, "请填写名称或标题"),
   description: text(1000).optional().transform((value) => value || null),
   externalUrl: z.union([z.literal(""), z.url().refine((value) => /^https?:\/\//i.test(value), "链接只允许 http/https")]).optional().transform((value) => value || null),
   anonymousPublic: z.coerce.boolean().default(false),
@@ -33,13 +38,24 @@ export const themeSchema = z.object({
   siteName: text(50).min(1),
   siteTagline: text(120),
   backgroundType: z.enum(["built_in", "custom"]),
-  backgroundImageUrl: z.union([z.literal(""), z.enum(["builtin:warm", "builtin:stars", "builtin:bubbles"]), z.url()]).optional().transform((v) => v || null),
+  backgroundImageUrl: z.union([
+    z.literal(""),
+    z.enum(["builtin:warm", "builtin:stars", "builtin:bubbles"]),
+    z.url().refine(isAllowedBackgroundUrl, "自定义背景必须来自本站的 Vercel Blob"),
+  ]).optional().transform((v) => v || null),
   primaryColor: colorSchema,
   secondaryColor: colorSchema,
   accentColor: colorSchema,
   backgroundColor: colorSchema,
   cardOpacity: z.coerce.number().min(0.7).max(1),
   backgroundOverlay: z.coerce.number().min(0).max(0.85),
+});
+
+export const siteCopySchema = z.object({
+  recommendationHeroTitle: text(80).min(1), recommendationHeroAccent: text(80).min(1), recommendationSectionTitle: text(80).min(1),
+  foodHeroTitle: text(100).min(1), foodTagline: text(180), foodSectionTitle: text(80).min(1),
+  wishHeroTitle: text(100).min(1), wishTagline: text(180), wishSectionTitle: text(80).min(1),
+  marshmallowHeroTitle: text(100).min(1), marshmallowTagline: text(180), marshmallowSectionTitle: text(80).min(1),
 });
 
 export const hostUpdateSchema = z.object({

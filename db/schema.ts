@@ -51,7 +51,7 @@ export const submissions = pgTable("submissions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
   source: text("source", { enum: ["user", "host"] }).notNull().default("user"),
-  category: text("category", { enum: ["book", "manga", "movie", "anime", "game", "other"] }).notNull(),
+  category: text("category", { enum: ["book", "manga", "movie", "anime", "game", "other", "food", "wish"] }).notNull(),
   title: text("title").notNull(),
   normalizedTitle: text("normalized_title").notNull(),
   description: text("description"),
@@ -71,7 +71,7 @@ export const submissions = pgTable("submissions", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
-  check("submissions_category_check", sql`${table.category} in ('book','manga','movie','anime','game','other')`),
+  check("submissions_category_check", sql`${table.category} in ('book','manga','movie','anime','game','other','food','wish')`),
   check("submissions_status_check", sql`${table.contentStatus} in ('pending','in_progress','completed','dropped')`),
   check("submissions_source_check", sql`${table.source} in ('user','host')`),
   check("submissions_score_check", sql`${table.score} is null or (${table.score} between 1 and 10 and ${table.contentStatus} = 'completed')`),
@@ -162,6 +162,24 @@ export const siteSettings = pgTable("site_settings", {
   check("site_settings_overlay_check", sql`${table.backgroundOverlay} between 0.00 and 0.85`),
 ]);
 
+export const siteCopySettings = pgTable("site_copy_settings", {
+  id: text("id").primaryKey().default("default"),
+  recommendationHeroTitle: text("recommendation_hero_title").notNull().default("把喜欢的作品，"),
+  recommendationHeroAccent: text("recommendation_hero_accent").notNull().default("推荐给神绮爱。"),
+  recommendationSectionTitle: text("recommendation_section_title").notNull().default("最近的作品推荐"),
+  foodHeroTitle: text("food_hero_title").notNull().default("好吃的，当然要一起分享。"),
+  foodTagline: text("food_tagline").notNull().default("推荐值得一吃的店铺、菜品和味道。"),
+  foodSectionTitle: text("food_section_title").notNull().default("大家的美食推荐"),
+  wishHeroTitle: text("wish_hero_title").notNull().default("下一次直播，想和神绮爱做什么？"),
+  wishTagline: text("wish_tagline").notNull().default("许愿台词回读、一起看作品，或任何直播企划。"),
+  wishSectionTitle: text("wish_section_title").notNull().default("等待实现的愿望"),
+  marshmallowHeroTitle: text("marshmallow_hero_title").notNull().default("给神绮爱一颗棉花糖"),
+  marshmallowTagline: text("marshmallow_tagline").notNull().default("写下想说的话，默认仅神绮爱可见。"),
+  marshmallowSectionTitle: text("marshmallow_section_title").notNull().default("已上墙的棉花糖"),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: updatedAt(),
+});
+
 export const activityLogs = pgTable("activity_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
@@ -176,3 +194,4 @@ export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
 export type SubmissionReview = typeof submissionReviews.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
+export type SiteCopySetting = typeof siteCopySettings.$inferSelect;

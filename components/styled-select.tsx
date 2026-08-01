@@ -31,13 +31,14 @@ export function StyledSelect({
   helper,
   onValueChange,
 }: StyledSelectProps) {
-  const [internalValue, setInternalValue] = useState(defaultValue);
+  const [uncontrolledState, setUncontrolledState] = useState({ sourceDefault: defaultValue, value: defaultValue });
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const labelId = useId();
   const listId = useId();
+  const internalValue = uncontrolledState.sourceDefault === defaultValue ? uncontrolledState.value : defaultValue;
   const value = controlledValue ?? internalValue;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const selected = options[selectedIndex] ?? options[0];
@@ -51,7 +52,7 @@ export function StyledSelect({
   }, []);
 
   function choose(nextValue: string) {
-    if (controlledValue === undefined) setInternalValue(nextValue);
+    if (controlledValue === undefined) setUncontrolledState({ sourceDefault: defaultValue, value: nextValue });
     onValueChange?.(nextValue);
     setOpen(false);
     trigger.current?.focus();
