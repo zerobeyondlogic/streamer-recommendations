@@ -407,7 +407,7 @@ export async function resetThemeAction() {
   const current=await getSettings();
   await getDb().delete(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default"));
   await getDb().delete(siteCopySettings).where((await import("drizzle-orm")).eq(siteCopySettings.id, "default"));
-  if(isBlobStorageConfigured())await Promise.all([current.backgroundType==="custom"?current.backgroundImageUrl:null,current.backgroundType==="custom"?current.backgroundImageMobileUrl:null,current.siteIconUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
+  if(isBlobStorageConfigured())await Promise.all([current.backgroundType==="custom"?current.backgroundImageUrl:null,current.backgroundType==="custom"?current.backgroundImageMobileUrl:null,current.siteIconUrl,current.recommendationHeroImageUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", `已恢复默认主题（由 ${host.username} 操作）`, "success");
 }
 
@@ -499,4 +499,46 @@ export async function removeSiteIconAction() {
     .onConflictDoUpdate({ target: siteSettings.id, set: { siteIconUrl: null, updatedBy: host.id, updatedAt: new Date() } });
   if (current?.siteIconUrl && isBlobStorageConfigured()) await del(current.siteIconUrl).catch(() => undefined);
   revalidatePath("/", "layout"); go("/host/theme", "网页图标已移除", "success");
+}
+
+const MAX_RECOMMENDATION_HERO_SIZE = 3 * 1024 * 1024;
+
+async function recommendationHeroFile(form: FormData) {
+  const file = form.get("recommendationHeroImage");
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_RECOMMENDATION_HERO_SIZE) throw new Error("首页插画必须是处理后不超过 3 MB 的图片");
+  if (file.type !== "image/webp") throw new Error("首页插画必须先在浏览器中处理为 WebP");
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const valid = [0x52,0x49,0x46,0x46].every((byte, index) => bytes[index] === byte) && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  if (!valid) throw new Error("首页插画不是有效的 WebP 图片");
+  return file;
+}
+
+export async function uploadRecommendationHeroImageAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  if (!isBlobStorageConfigured()) go("/host/theme", "请先连接 Vercel Blob 并配置真实的 BLOB_READ_WRITE_TOKEN");
+  let image: File;
+  try { image = await recommendationHeroFile(form); }
+  catch (error) { go("/host/theme", error instanceof Error ? error.message : "首页插画无效"); }
+  const [old] = await getDb().select({ url: siteSettings.recommendationHeroImageUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  let uploadedUrl: string | null = null;
+  try {
+    const blob = await put(`recommendation-hero/${crypto.randomUUID()}.webp`, image, { access: "public", addRandomSuffix: false });
+    uploadedUrl = blob.url;
+    await getDb().insert(siteSettings).values({ id: "default", recommendationHeroImageUrl: blob.url, updatedBy: host.id })
+      .onConflictDoUpdate({ target: siteSettings.id, set: { recommendationHeroImageUrl: blob.url, updatedBy: host.id, updatedAt: new Date() } });
+  } catch (error) {
+    if (uploadedUrl) await del(uploadedUrl).catch(() => undefined);
+    go("/host/theme", error instanceof Error ? `首页插画上传失败：${error.message}` : "首页插画上传失败");
+  }
+  if (old?.url && old.url !== uploadedUrl) await del(old.url).catch(() => undefined);
+  revalidatePath("/"); go("/host/theme", "推荐单首页插画已更新", "success");
+}
+
+export async function removeRecommendationHeroImageAction() {
+  await assertSameOrigin(); const host = await requireHost();
+  const [current] = await getDb().select({ url: siteSettings.recommendationHeroImageUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  await getDb().insert(siteSettings).values({ id: "default", recommendationHeroImageUrl: null, updatedBy: host.id })
+    .onConflictDoUpdate({ target: siteSettings.id, set: { recommendationHeroImageUrl: null, updatedBy: host.id, updatedAt: new Date() } });
+  if (current?.url && isBlobStorageConfigured()) await del(current.url).catch(() => undefined);
+  revalidatePath("/"); go("/host/theme", "推荐单首页插画已移除", "success");
 }

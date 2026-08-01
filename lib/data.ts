@@ -5,11 +5,11 @@ import { getDb } from "@/db";
 import { activityLogs, hostReplies, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, submissionKind, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
 import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
-import { firstOpenPatch, marshmallowReadPatch, replyEffects } from "./transitions";
+import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmissionAuthor } from "./transitions";
 
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
-  siteIconUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
+  siteIconUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
@@ -408,6 +408,7 @@ export async function saveHostReply(hostId: string, submissionId: string, conten
     const [existing] = await tx.select().from(hostReplies).where(eq(hostReplies.submissionId, submissionId)).limit(1);
     const now = new Date();
     const effects=replyEffects(!!existing,republish,notifyAgain,now);
+    const notifyAuthor = shouldNotifySubmissionAuthor(submission.source, submission.userId, hostId);
     let replyId: string;
     if (existing) {
       replyId = existing.id;
@@ -419,11 +420,11 @@ export async function saveHostReply(hostId: string, submissionId: string, conten
         ...(submission.category === "wish" ? {} : { contentStatus: "completed" as const, contentCompletedAt: now }),
         feedActivityAt: effects.feedActivityAt, updatedAt: now,
       }).where(eq(submissions.id, submissionId));
-      if (submission.source === "user") await tx.insert(notifications).values({ userId: submission.userId, type: "host_reply", submissionId, replyId });
+      if (notifyAuthor) await tx.insert(notifications).values({ userId: submission.userId, type: "host_reply", submissionId, replyId });
     }
     if (existing && effects.feedActivityAt) {
       await tx.update(submissions).set({ feedActivityAt: effects.feedActivityAt, updatedAt: now }).where(eq(submissions.id, submissionId));
-      if (effects.notificationType && submission.source === "user") await tx.insert(notifications).values({ userId: submission.userId, type: effects.notificationType, submissionId, replyId });
+      if (effects.notificationType && notifyAuthor) await tx.insert(notifications).values({ userId: submission.userId, type: effects.notificationType, submissionId, replyId });
     }
     await tx.insert(activityLogs).values({ actorUserId: hostId, submissionId, action: existing ? "host_reply_updated" : "host_reply_published", metadata: { republish, notifyAgain } });
   });

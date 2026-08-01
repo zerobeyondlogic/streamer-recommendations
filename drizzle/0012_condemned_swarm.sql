@@ -1,0 +1,1 @@
+ALTER TABLE "site_settings" ADD COLUMN "recommendation_hero_image_url" text;
