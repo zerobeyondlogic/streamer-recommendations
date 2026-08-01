@@ -156,12 +156,16 @@ export const siteSettings = pgTable("site_settings", {
   secondaryColor: text("secondary_color").notNull().default("#ff9f76"),
   accentColor: text("accent_color").notNull().default("#f4c95d"),
   backgroundColor: text("background_color").notNull().default("#fff9f2"),
+  navOpacity: numeric("nav_opacity", { precision: 3, scale: 2 }).notNull().default("0.94"),
+  heroOpacity: numeric("hero_opacity", { precision: 3, scale: 2 }).notNull().default("0.94"),
   cardOpacity: numeric("card_opacity", { precision: 3, scale: 2 }).notNull().default("0.94"),
   backgroundOverlay: numeric("background_overlay", { precision: 3, scale: 2 }).notNull().default("0.30"),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: updatedAt(),
 }, (table) => [
   check("site_settings_background_type_check", sql`${table.backgroundType} in ('built_in','custom')`),
+  check("site_settings_nav_opacity_check", sql`${table.navOpacity} between 0.70 and 1.00`),
+  check("site_settings_hero_opacity_check", sql`${table.heroOpacity} between 0.70 and 1.00`),
   check("site_settings_card_opacity_check", sql`${table.cardOpacity} between 0.70 and 1.00`),
   check("site_settings_overlay_check", sql`${table.backgroundOverlay} between 0.00 and 0.85`),
 ]);

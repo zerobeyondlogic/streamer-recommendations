@@ -177,7 +177,7 @@ html[data-color-mode="dark"] .mode-dark-only,html[data-color-mode="dark"] .theme
 @media(max-width:620px){.own-review-actions{align-items:stretch;flex-direction:column}.own-review-edit,.own-review-edit summary,.own-review-actions>form,.own-review-actions>form .button{width:100%}}
 
 /* Workbench hierarchy, account settings and complete theme system. */
-:root{--page-background:var(--color-background);--surface:rgb(255 255 255/var(--card-opacity));--surface-solid:#fffdfa;--surface-muted:#f6f2ef}
+:root{--nav-opacity:.94;--hero-opacity:.94;--page-background:var(--color-background);--nav-surface:rgb(255 255 255/var(--nav-opacity));--hero-surface:rgb(255 255 255/var(--hero-opacity));--surface:rgb(255 255 255/var(--card-opacity));--surface-solid:#fffdfa;--surface-muted:#f6f2ef}
 body{background:var(--page-background)}
 .built-in-background.builtin-mint{background-image:radial-gradient(ellipse at 12% 18%,color-mix(in srgb,var(--color-secondary) 24%,transparent) 0 13%,transparent 14%),repeating-radial-gradient(circle at 78% 32%,transparent 0 28px,color-mix(in srgb,var(--color-primary) 10%,transparent) 29px 31px,transparent 32px 72px)}
 .built-in-background.builtin-dusk{background-image:linear-gradient(135deg,transparent 0 60%,color-mix(in srgb,var(--color-primary) 9%,transparent) 60% 74%,transparent 74%),radial-gradient(circle at 82% 14%,color-mix(in srgb,var(--color-secondary) 22%,transparent) 0 110px,transparent 112px)}
@@ -196,7 +196,7 @@ body{background:var(--page-background)}
 .theme-mode-toggle{width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid color-mix(in srgb,var(--color-primary) 16%,var(--line));border-radius:13px;background:rgb(255 255 255/.64);color:#514c59;font-weight:850}.theme-mode-toggle:hover,.theme-mode-toggle:focus-visible{outline:none;border-color:var(--color-primary);color:var(--color-primary);background:color-mix(in srgb,var(--color-primary) 8%,white)}.theme-mode-toggle .nav-icon{display:block!important;width:19px;height:19px}.theme-mode-toggle .theme-mode-sun{display:none!important}html[data-color-mode="dark"] .theme-mode-toggle .theme-mode-moon{display:none!important}html[data-color-mode="dark"] .theme-mode-toggle .theme-mode-sun{display:block!important}
 
 /* Night mode uses the saved brand palette while replacing every reading surface. */
-html[data-color-mode="dark"]{--page-background:color-mix(in srgb,var(--color-background) 8%,#121119);--ink:#f4f0fa;--muted:#b9b2c4;--line:rgb(235 226 247/.15);--shadow:0 14px 38px rgb(0 0 0/.28);--surface:rgb(31 29 41/var(--card-opacity));--surface-solid:#211f2b;--surface-muted:#292632}
+html[data-color-mode="dark"]{--page-background:color-mix(in srgb,var(--color-background) 8%,#121119);--ink:#f4f0fa;--muted:#b9b2c4;--line:rgb(235 226 247/.15);--shadow:0 14px 38px rgb(0 0 0/.28);--nav-surface:rgb(31 29 41/var(--nav-opacity));--hero-surface:rgb(31 29 41/var(--hero-opacity));--surface:rgb(31 29 41/var(--card-opacity));--surface-solid:#211f2b;--surface-muted:#292632}
 html[data-color-mode="dark"] .background-overlay{background:rgb(13 12 19/.68)}
 html[data-color-mode="dark"] .site-header{background:rgb(18 17 25/.9);border-color:var(--line)}
 html[data-color-mode="dark"] .nav-links,html[data-color-mode="dark"] .category-nav>a,html[data-color-mode="dark"] .category-nav-main,html[data-color-mode="dark"] label,html[data-color-mode="dark"] .styled-select-field{color:#c8c1d1}
@@ -353,10 +353,26 @@ html[data-color-mode="dark"] .collection-wish .collection-hero{background:linear
 /* Align the marshmallow composer with the full-width hero capsule. */
 .marshmallow-page .marshmallow-compose{width:100%;max-width:none;margin-inline:0}
 
-/* Public hero capsules use a quieter high-opacity surface over custom artwork. */
-.collection-work .hero,.collection-hero,.collection-food .collection-hero,.collection-wish .collection-hero,.page-shell.marshmallow-page .marshmallow-hero{border-color:rgb(106 85 72/.12);background:rgb(255 255 255/.94);backdrop-filter:none}
+/* Public hero capsules use their dedicated theme opacity. */
+.collection-work .hero,.collection-hero,.collection-food .collection-hero,.collection-wish .collection-hero,.page-shell.marshmallow-page .marshmallow-hero{border-color:rgb(106 85 72/.12);background:var(--hero-surface);backdrop-filter:none}
 .collection-work .hero::before,.collection-work .hero::after,.collection-hero::after{display:none}
-html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"] .collection-hero,html[data-color-mode="dark"] .collection-food .collection-hero,html[data-color-mode="dark"] .collection-wish .collection-hero,html[data-color-mode="dark"] .page-shell.marshmallow-page .marshmallow-hero{border-color:var(--line);background:rgb(31 29 41/.94)}
+html[data-color-mode="dark"] .collection-work .hero,html[data-color-mode="dark"] .collection-hero,html[data-color-mode="dark"] .collection-food .collection-hero,html[data-color-mode="dark"] .collection-wish .collection-hero,html[data-color-mode="dark"] .page-shell.marshmallow-page .marshmallow-hero{border-color:var(--line);background:var(--hero-surface)}
+
+/* The top navigation capsule uses its dedicated theme opacity. */
+.nav-shell{border-color:rgb(106 85 72/.12);background:var(--nav-surface);backdrop-filter:none}
+html[data-color-mode="dark"] .nav-shell{border-color:var(--line);background:var(--nav-surface)}
+
+/* Theme preview exposes the three independently adjustable surface layers. */
+.opacity-control-grid{display:grid;gap:13px;padding:14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--color-primary) 4%,var(--surface-solid))}
+.theme-preview{min-height:590px;align-content:start;place-items:stretch;gap:14px;padding:24px}
+.theme-preview-nav,.theme-preview-hero,.theme-preview article{position:relative;width:100%;border:1px solid rgb(0 0 0/.1);box-shadow:var(--shadow)}
+.theme-preview-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-radius:17px;background:rgb(255 255 255/var(--preview-nav-opacity));font-size:.73rem;font-weight:900}
+.theme-preview-nav span{color:var(--muted);font-size:.64rem}
+.theme-preview-hero{padding:24px;border-radius:23px;background:rgb(255 255 255/var(--preview-hero-opacity))}
+.theme-preview-hero>span{color:var(--preview-primary);font-size:.68rem;font-weight:900;letter-spacing:.08em}
+.theme-preview-hero h3,.theme-preview article h3{margin:12px 0 7px}.theme-preview-hero p,.theme-preview article p{margin:0}
+.theme-preview article{padding:22px;border-radius:21px;background:rgb(255 255 255/var(--preview-card-opacity))}
+html[data-color-mode="dark"] .opacity-control-grid{background:color-mix(in srgb,var(--color-primary) 10%,var(--surface-solid))}
 
 @media(max-width:860px){.hero-media{min-height:300px}.recommendation-hero-editor{grid-template-columns:1fr 1fr}.recommendation-hero-actions{grid-column:1/-1;grid-template-columns:1fr auto}.recommendation-hero-actions .button{width:100%}}
 @media(max-width:600px){.hero-media{min-height:250px}.recommendation-hero-editor{grid-template-columns:1fr;padding:20px}.recommendation-hero-preview{min-height:170px}.recommendation-hero-actions{grid-column:auto;grid-template-columns:1fr}.recommendation-hero-actions .button{width:100%}}

@@ -10,7 +10,7 @@ import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmiss
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
   siteIconUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
-  accentColor: "#f4c95d", backgroundColor: "#fff9f2", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
+  accentColor: "#f4c95d", backgroundColor: "#fff9f2", navOpacity: "0.94", heroOpacity: "0.94", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 
 export const defaultSiteCopy = {
@@ -496,7 +496,7 @@ export async function deleteManagedUser(hostId: string, userId: string) {
   });
 }
 
-type SettingsInput = { backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; cardOpacity:string; backgroundOverlay:string };
+type SettingsInput = { backgroundType:"built_in"|"custom"; backgroundImageUrl:string|null; primaryColor:string; secondaryColor:string; accentColor:string; backgroundColor:string; navOpacity:string; heroOpacity:string; cardOpacity:string; backgroundOverlay:string };
 export async function updateSettings(hostId: string, value: SettingsInput) {
   const backgroundPatch = value.backgroundType === "built_in" ? { backgroundImageMobileUrl: null } : {};
   await getDb().insert(siteSettings).values({ id: "default", ...value, ...backgroundPatch, updatedBy: hostId, updatedAt: new Date() })

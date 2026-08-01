@@ -31,6 +31,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const style = {
     "--color-primary": settings.primaryColor, "--color-secondary": settings.secondaryColor,
     "--color-accent": settings.accentColor, "--color-background": settings.backgroundColor,
+    "--nav-opacity": settings.navOpacity, "--hero-opacity": settings.heroOpacity,
     "--card-opacity": settings.cardOpacity, "--background-overlay": settings.backgroundOverlay,
     ...(customBackgroundUrl ? { "--custom-background": `url("${customBackgroundUrl}")`, "--custom-background-mobile": `url("${customMobileBackgroundUrl}")` } : {}),
   } as CSSProperties;

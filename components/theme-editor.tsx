@@ -12,11 +12,13 @@ type ThemeState = {
   secondary: string;
   accent: string;
   background: string;
-  opacity: number;
+  navOpacity: number;
+  heroOpacity: number;
+  cardOpacity: number;
   overlay: number;
 };
 
-const rootProperties = ["--color-primary", "--color-secondary", "--color-accent", "--color-background", "--card-opacity", "--background-overlay", "--custom-background"] as const;
+const rootProperties = ["--color-primary", "--color-secondary", "--color-accent", "--color-background", "--nav-opacity", "--hero-opacity", "--card-opacity", "--background-overlay", "--custom-background"] as const;
 
 export function ThemeEditor({ settings }: { settings: SiteSetting }) {
   const [colors, setColors] = useState<ThemeState>({
@@ -24,7 +26,9 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     secondary: settings.secondaryColor,
     accent: settings.accentColor,
     background: settings.backgroundColor,
-    opacity: Number(settings.cardOpacity),
+    navOpacity: Number(settings.navOpacity),
+    heroOpacity: Number(settings.heroOpacity),
+    cardOpacity: Number(settings.cardOpacity),
     overlay: Number(settings.backgroundOverlay),
   });
   const savedPreset = presetIdFromBackground(settings.backgroundImageUrl);
@@ -52,7 +56,9 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     root.style.setProperty("--color-secondary", colors.secondary);
     root.style.setProperty("--color-accent", colors.accent);
     root.style.setProperty("--color-background", colors.background);
-    root.style.setProperty("--card-opacity", String(colors.opacity));
+    root.style.setProperty("--nav-opacity", String(colors.navOpacity));
+    root.style.setProperty("--hero-opacity", String(colors.heroOpacity));
+    root.style.setProperty("--card-opacity", String(colors.cardOpacity));
     root.style.setProperty("--background-overlay", String(colors.overlay));
     document.body.classList.remove("has-custom-background", "built-in-background", "builtin-stars", "builtin-bubbles", ...themePresetIds.map((id) => `builtin-${id}`));
     if (presetId) {
@@ -67,7 +73,7 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
   function choosePreset(id: ThemePresetId) {
     const preset = themePresets[id];
     setBackground(preset.backgroundImageUrl);
-    setColors({ primary: preset.primaryColor, secondary: preset.secondaryColor, accent: preset.accentColor, background: preset.backgroundColor, opacity: preset.cardOpacity, overlay: preset.backgroundOverlay });
+    setColors({ primary: preset.primaryColor, secondary: preset.secondaryColor, accent: preset.accentColor, background: preset.backgroundColor, navOpacity: preset.navOpacity, heroOpacity: preset.heroOpacity, cardOpacity: preset.cardOpacity, overlay: preset.backgroundOverlay });
   }
 
   const previewStyle = {
@@ -76,7 +82,9 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
     "--preview-primary": colors.primary,
     "--preview-secondary": colors.secondary,
     "--preview-accent": colors.accent,
-    "--preview-opacity": colors.opacity,
+    "--preview-nav-opacity": colors.navOpacity,
+    "--preview-hero-opacity": colors.heroOpacity,
+    "--preview-card-opacity": colors.cardOpacity,
   } as CSSProperties;
 
   return <form className="theme-layout" action={themeAction}>
@@ -97,12 +105,16 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
       <input type="hidden" name="backgroundImageUrl" value={background}/>
       <details className="theme-tuning"><summary><SlidersHorizontal aria-hidden="true"/>微调当前主题</summary><div className="stack">
         <div className="color-grid"><Color name="primaryColor" label="主色" value={colors.primary} onChange={(v) => set("primary", v)}/><Color name="secondaryColor" label="辅助色" value={colors.secondary} onChange={(v) => set("secondary", v)}/><Color name="accentColor" label="强调色" value={colors.accent} onChange={(v) => set("accent", v)}/><Color name="backgroundColor" label="页面背景" value={colors.background} onChange={(v) => set("background", v)}/></div>
-        <label>卡片透明度 <b>{colors.opacity.toFixed(2)}</b><input name="cardOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.opacity} onChange={(event) => set("opacity", Number(event.target.value))}/></label>
+        <div className="opacity-control-grid">
+          <label>顶部菜单栏 <b>{colors.navOpacity.toFixed(2)}</b><input name="navOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.navOpacity} onChange={(event) => set("navOpacity", Number(event.target.value))}/></label>
+          <label>页面大卡片 <b>{colors.heroOpacity.toFixed(2)}</b><input name="heroOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.heroOpacity} onChange={(event) => set("heroOpacity", Number(event.target.value))}/></label>
+          <label>普通内容卡片 <b>{colors.cardOpacity.toFixed(2)}</b><input name="cardOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.cardOpacity} onChange={(event) => set("cardOpacity", Number(event.target.value))}/></label>
+        </div>
         <label>背景遮罩 <b>{colors.overlay.toFixed(2)}</b><input name="backgroundOverlay" type="range" min="0" max="0.85" step="0.01" value={colors.overlay} onChange={(event) => set("overlay", Number(event.target.value))}/></label>
       </div></details>
       <button className="button primary" type="submit">保存网页主题</button>
     </section>
-    <section className="theme-preview-wrap"><span className="eyebrow">实时预览</span><div className={`theme-preview ${presetId ? `builtin-${presetId}` : "theme-preview-custom"}`} style={previewStyle}><Cloud className="preview-cloud" aria-hidden="true"/><article><span>推荐单</span><h3>一部让人想聊很久的作品</h3><p>背景、配色、卡片和按钮会一起变化。</p><button type="button">查看详情</button></article></div></section>
+    <section className="theme-preview-wrap"><span className="eyebrow">实时预览</span><div className={`theme-preview ${presetId ? `builtin-${presetId}` : "theme-preview-custom"}`} style={previewStyle}><Cloud className="preview-cloud" aria-hidden="true"/><div className="theme-preview-nav">网站标题 <span>推荐单　许愿箱　美食家</span></div><div className="theme-preview-hero"><span>页面大卡片</span><h3>把喜欢的作品分享出来</h3><p>顶部主视觉使用独立透明度。</p></div><article><span>普通内容卡片</span><h3>一部让人想聊很久的作品</h3><p>列表、详情和表单使用普通卡片透明度。</p><button type="button">查看详情</button></article></div></section>
   </form>;
 }
 
