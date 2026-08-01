@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BookOpen, ChevronDown, Cloud, Film, Gamepad2, Images, Shapes, Sparkles, Tv, Utensils } from "lucide-react";
 import { categoryLabels, primaryCategories } from "@/lib/config";
 
 export function MainNavigation() {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const recommendationActive = pathname === "/";
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -25,8 +28,8 @@ export function MainNavigation() {
   }, []);
 
   return <div className="category-nav" aria-label="网站栏目">
-    <div className={`recommendation-nav ${open ? "is-open" : ""}`} ref={wrapperRef}>
-      <Link className="category-nav-main" href="/" onClick={() => setOpen(false)}><BookOpen className="category-icon" aria-hidden="true"/><span>推荐单</span></Link>
+    <div className={`recommendation-nav ${open ? "is-open" : ""} ${recommendationActive ? "is-active" : ""}`} ref={wrapperRef}>
+      <Link className="category-nav-main" href="/" aria-current={recommendationActive ? "page" : undefined} onClick={() => setOpen(false)}><BookOpen className="category-icon" aria-hidden="true"/><span>推荐单</span></Link>
       <button type="button" aria-label="展开推荐单分类" aria-expanded={open} onClick={() => setOpen((value) => !value)}><ChevronDown aria-hidden="true"/></button>
       <div className="recommendation-submenu" aria-label="推荐单分类">
         <Link href="/" onClick={() => setOpen(false)}><Sparkles aria-hidden="true"/><span>全部推荐</span></Link>
@@ -37,8 +40,8 @@ export function MainNavigation() {
         <Link href="/?category=other" onClick={() => setOpen(false)}><Shapes aria-hidden="true"/><span>其他</span></Link>
       </div>
     </div>
-    <Link href="/wishes"><Sparkles className="category-icon" aria-hidden="true"/><span>许愿箱</span></Link>
-    <Link href="/food"><Utensils className="category-icon" aria-hidden="true"/><span>美食家</span></Link>
-    <Link href="/marshmallow"><Cloud className="category-icon" aria-hidden="true"/><span>棉花糖</span></Link>
+    <Link className={pathname === "/wishes" ? "is-active" : undefined} aria-current={pathname === "/wishes" ? "page" : undefined} href="/wishes"><Sparkles className="category-icon" aria-hidden="true"/><span>许愿箱</span></Link>
+    <Link className={pathname === "/food" ? "is-active" : undefined} aria-current={pathname === "/food" ? "page" : undefined} href="/food"><Utensils className="category-icon" aria-hidden="true"/><span>美食家</span></Link>
+    <Link className={pathname === "/marshmallow" ? "is-active" : undefined} aria-current={pathname === "/marshmallow" ? "page" : undefined} href="/marshmallow"><Cloud className="category-icon" aria-hidden="true"/><span>棉花糖</span></Link>
   </div>;
 }

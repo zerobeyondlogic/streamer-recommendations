@@ -3,7 +3,7 @@ import { activityLogs, hostReplies, marshmallows, notifications, siteCopySetting
 import { isAllowedBackgroundUrl, safeSpreadsheetCell, sha256 } from "./security";
 import type { Cell, Sheet, SheetData } from "write-excel-file/node";
 
-export const SCHEMA_VERSION = "7";
+export const SCHEMA_VERSION = "8";
 const isoDate = () => new Date().toISOString().slice(0, 10);
 const json = (value: unknown) => Buffer.from(JSON.stringify(value, null, 2));
 
@@ -29,7 +29,7 @@ export async function createXlsxExport() {
   add("通知", ["通知 ID","接收用户 ID","类型","投稿 ID","是否已读","创建时间"], notificationRows.map((n) => [n.id,n.userId,n.type,n.submissionId,!!n.readAt,n.createdAt]));
   add("棉花糖", ["棉花糖 ID","投稿用户名","内容","允许公开","投稿时间","已读时间","公开时间","是否移除","移除时间"], marshmallowRows.map((m) => [m.id,usernames.get(m.userId),m.content,m.allowPublic,m.createdAt,m.readAt,m.publishedAt,!!m.deletedAt,m.deletedAt]));
   add("用户评价", ["评价 ID","投稿 ID","用户名","推荐","评论","创建时间","更新时间"], reviewRows.map((r) => [r.id,r.submissionId,usernames.get(r.userId),r.recommend,r.comment,r.createdAt,r.updatedAt]));
-  add("主题设置", ["网站名称","网站副标题","背景类型","电脑背景地址","手机背景地址","主色","辅助色","强调色","页面背景色","卡片透明度","遮罩强度","更新时间"], settingsRows.map((s) => [s.siteName,s.siteTagline,s.backgroundType,s.backgroundImageUrl,s.backgroundImageMobileUrl,s.primaryColor,s.secondaryColor,s.accentColor,s.backgroundColor,s.cardOpacity,s.backgroundOverlay,s.updatedAt]));
+  add("主题设置", ["网站名称","网站副标题","网页图标地址","背景类型","电脑背景地址","手机背景地址","主色","辅助色","强调色","页面背景色","卡片透明度","遮罩强度","更新时间"], settingsRows.map((s) => [s.siteName,s.siteTagline,s.siteIconUrl,s.backgroundType,s.backgroundImageUrl,s.backgroundImageMobileUrl,s.primaryColor,s.secondaryColor,s.accentColor,s.backgroundColor,s.cardOpacity,s.backgroundOverlay,s.updatedAt]));
   add("页面文案", ["推荐单主标题","推荐单强调标题","推荐单副标题","推荐单列表标题","美食家主标题","美食家副标题","美食家列表标题","许愿箱主标题","许愿箱副标题","许愿箱列表标题","棉花糖主标题","棉花糖副标题","棉花糖公开墙标题","更新时间"], copyRows.map((s) => [s.recommendationHeroTitle,s.recommendationHeroAccent,s.recommendationTagline,s.recommendationSectionTitle,s.foodHeroTitle,s.foodTagline,s.foodSectionTitle,s.wishHeroTitle,s.wishTagline,s.wishSectionTitle,s.marshmallowHeroTitle,s.marshmallowTagline,s.marshmallowSectionTitle,s.updatedAt]));
   const bytes = await writeExcelFile(sheets).toBuffer();
   return { filename: `streamer-recommendations-${isoDate()}.xlsx`, bytes };
@@ -47,8 +47,10 @@ export async function createFullBackup() {
   files.set("users.json", json(userRows)); files.set("submissions.json", json(submissionRows)); files.set("marshmallows.json", json(marshmallowRows)); files.set("submission-reviews.json", json(reviewRows)); files.set("host-replies.json", json(replyRows)); files.set("notifications.json", json(notificationRows)); files.set("site-settings.json", json(settingsRows)); files.set("site-copy-settings.json", json(copyRows)); files.set("activity-logs.json", json(logRows));
   const customBackground = settingsRows[0]?.backgroundType === "custom" && isAllowedBackgroundUrl(settingsRows[0].backgroundImageUrl) ? settingsRows[0].backgroundImageUrl : null;
   const customMobileBackground = settingsRows[0]?.backgroundType === "custom" && isAllowedBackgroundUrl(settingsRows[0].backgroundImageMobileUrl) ? settingsRows[0].backgroundImageMobileUrl : null;
+  const siteIcon = isAllowedBackgroundUrl(settingsRows[0]?.siteIconUrl) ? settingsRows[0].siteIconUrl : null;
   if (customBackground) try { const response = await fetch(customBackground); if (response.ok) { const data=Buffer.from(await response.arrayBuffer()); if(data.length<=10*1024*1024) files.set(`assets/background-desktop${extensionFromMime(response.headers.get("content-type"))}`,data); } } catch { /* manifest keeps the source URL when asset fetch is unavailable */ }
   if (customMobileBackground) try { const response = await fetch(customMobileBackground); if (response.ok) { const data=Buffer.from(await response.arrayBuffer()); if(data.length<=10*1024*1024) files.set(`assets/background-mobile${extensionFromMime(response.headers.get("content-type"))}`,data); } } catch { /* manifest keeps the source URL when asset fetch is unavailable */ }
+  if (siteIcon) try { const response = await fetch(siteIcon); if (response.ok) { const data=Buffer.from(await response.arrayBuffer()); if(data.length<=2*1024*1024) files.set(`assets/site-icon${extensionFromMime(response.headers.get("content-type"))}`,data); } } catch { /* manifest keeps the source URL when asset fetch is unavailable */ }
   files.set("checksums.sha256", Buffer.from([...files.entries()].map(([name,data])=>`${sha256(data)}  ${name}`).join("\n")+"\n"));
   const zip = new JSZip(); files.forEach((data,name)=>zip.file(name,data));
   return { filename:`streamer-recommendations-backup-${isoDate()}.zip`, bytes:await zip.generateAsync({type:"nodebuffer",compression:"DEFLATE",compressionOptions:{level:6}}) };

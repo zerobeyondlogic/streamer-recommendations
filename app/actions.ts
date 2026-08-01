@@ -407,7 +407,7 @@ export async function resetThemeAction() {
   const current=await getSettings();
   await getDb().delete(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default"));
   await getDb().delete(siteCopySettings).where((await import("drizzle-orm")).eq(siteCopySettings.id, "default"));
-  if(current.backgroundType==="custom"&&isBlobStorageConfigured())await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
+  if(isBlobStorageConfigured())await Promise.all([current.backgroundType==="custom"?current.backgroundImageUrl:null,current.backgroundType==="custom"?current.backgroundImageMobileUrl:null,current.siteIconUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", `已恢复默认主题（由 ${host.username} 操作）`, "success");
 }
 
@@ -458,4 +458,45 @@ export async function removeBackgroundAction(){
   await getDb().insert(siteSettings).values({id:"default",backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id}).onConflictDoUpdate({target:siteSettings.id,set:{backgroundType:"built_in",backgroundImageUrl:warm.backgroundImageUrl,backgroundImageMobileUrl:null,primaryColor:warm.primaryColor,secondaryColor:warm.secondaryColor,accentColor:warm.accentColor,backgroundColor:warm.backgroundColor,cardOpacity:String(warm.cardOpacity),backgroundOverlay:String(warm.backgroundOverlay),updatedBy:host.id,updatedAt:new Date()}});
   if(current.backgroundType==="custom"&&isBlobStorageConfigured())await Promise.all([current.backgroundImageUrl,current.backgroundImageMobileUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/","layout");go("/host/theme","自定义背景已移除","success");
+}
+
+const MAX_SITE_ICON_SIZE = 2 * 1024 * 1024;
+
+async function siteIconFile(form: FormData) {
+  const file = form.get("siteIcon");
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_SITE_ICON_SIZE) throw new Error("网页图标必须是处理后不超过 2 MB 的图片");
+  if (file.type !== "image/png") throw new Error("网页图标必须先在浏览器中处理为 PNG");
+  const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  if (![0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((byte, index) => bytes[index] === byte)) throw new Error("网页图标不是有效的 PNG 图片");
+  return file;
+}
+
+export async function uploadSiteIconAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  if (!isBlobStorageConfigured()) go("/host/theme", "请先连接 Vercel Blob 并配置真实的 BLOB_READ_WRITE_TOKEN");
+  let icon: File;
+  try { icon = await siteIconFile(form); }
+  catch (error) { go("/host/theme", error instanceof Error ? error.message : "网页图标无效"); }
+  const [old] = await getDb().select({ siteIconUrl: siteSettings.siteIconUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  let uploadedUrl: string | null = null;
+  try {
+    const blob = await put(`site-icons/${crypto.randomUUID()}.png`, icon, { access: "public", addRandomSuffix: false });
+    uploadedUrl = blob.url;
+    await getDb().insert(siteSettings).values({ id: "default", siteIconUrl: blob.url, updatedBy: host.id })
+      .onConflictDoUpdate({ target: siteSettings.id, set: { siteIconUrl: blob.url, updatedBy: host.id, updatedAt: new Date() } });
+  } catch (error) {
+    if (uploadedUrl) await del(uploadedUrl).catch(() => undefined);
+    go("/host/theme", error instanceof Error ? `网页图标上传失败：${error.message}` : "网页图标上传失败");
+  }
+  if (old?.siteIconUrl && old.siteIconUrl !== uploadedUrl) await del(old.siteIconUrl).catch(() => undefined);
+  revalidatePath("/", "layout"); go("/host/theme", "网页图标已更新", "success");
+}
+
+export async function removeSiteIconAction() {
+  await assertSameOrigin(); const host = await requireHost();
+  const [current] = await getDb().select({ siteIconUrl: siteSettings.siteIconUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  await getDb().insert(siteSettings).values({ id: "default", siteIconUrl: null, updatedBy: host.id })
+    .onConflictDoUpdate({ target: siteSettings.id, set: { siteIconUrl: null, updatedBy: host.id, updatedAt: new Date() } });
+  if (current?.siteIconUrl && isBlobStorageConfigured()) await del(current.siteIconUrl).catch(() => undefined);
+  revalidatePath("/", "layout"); go("/host/theme", "网页图标已移除", "success");
 }

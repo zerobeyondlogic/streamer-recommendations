@@ -78,6 +78,13 @@
       "when": 1785595770912,
       "tag": "0010_set_host_bilibili_uid",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785600732352,
+      "tag": "0011_site_icon",
+      "breakpoints": true
     }
   ]
 }

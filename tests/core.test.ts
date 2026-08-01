@@ -1,6 +1,6 @@
 import { describe,expect,it } from "vitest";
 import { contentStatusLabel, submissionKind } from "../lib/config";
-import { isAllowedBackgroundUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
+import { isAllowedBackgroundUrl,isAllowedSiteIconUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
 import { clearRateLimitsForTests,consumeRateLimit } from "../lib/rate-limit";
 import { accountPasswordSchema,accountUsernameSchema,colorSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
@@ -18,6 +18,7 @@ describe("账号与输入安全",()=>{
   it("修改用户名必须提供有效用户名与当前密码",()=>{expect(accountUsernameSchema.safeParse({username:"新名字",currentPassword:"current-pass"}).success).toBe(true);expect(accountUsernameSchema.safeParse({username:"a",currentPassword:"current-pass"}).success).toBe(false)});
   it("修改密码拒绝确认不一致和重复使用当前密码",()=>{expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"new-password",confirmPassword:"new-password"}).success).toBe(true);expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"new-password",confirmPassword:"wrong-password"}).success).toBe(false);expect(accountPasswordSchema.safeParse({currentPassword:"current-pass",password:"current-pass",confirmPassword:"current-pass"}).success).toBe(false)});
   it("自定义背景只接受本站 Vercel Blob",()=>{expect(isAllowedBackgroundUrl("https://store.public.blob.vercel-storage.com/background.png")).toBe(true);expect(isAllowedBackgroundUrl("https://example.com/background.png")).toBe(false)});
+  it("网页图标只接受本站 Vercel Blob",()=>{expect(isAllowedSiteIconUrl("https://store.public.blob.vercel-storage.com/site-icons/icon.png")).toBe(true);expect(isAllowedSiteIconUrl("data:image/png;base64,unsafe")).toBe(false)});
   it("分页参数限制为有限范围",()=>{expect(safePageNumber("2.9")).toBe(2);expect(safePageNumber("Infinity")).toBe(1);expect(safePageNumber("999999")).toBe(500)});
   it("重定向只允许本站路径",()=>{expect(safeLocalPath("/host/library?status=pending")).toBe("/host/library?status=pending");expect(safeLocalPath("//evil.example")).toBe("/");expect(safeLocalPath("https://evil.example")).toBe("/")});
   it("实例限流器会阻止窗口内的超额请求",()=>{clearRateLimitsForTests();expect(consumeRateLimit("login:test",1,60_000).ok).toBe(true);expect(consumeRateLimit("login:test",1,60_000).ok).toBe(false)});

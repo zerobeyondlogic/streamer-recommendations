@@ -39,3 +39,5 @@ export function isAllowedBackgroundUrl(value: string | null | undefined) {
     return false;
   }
 }
+
+export const isAllowedSiteIconUrl = isAllowedBackgroundUrl;
