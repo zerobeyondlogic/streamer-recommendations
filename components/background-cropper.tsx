@@ -32,10 +32,9 @@ function drawCrop(canvas: HTMLCanvasElement, image: HTMLImageElement, target: Ta
   const height = output ? frame.outputHeight : frame.height;
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext("2d", { alpha: false });
+  const context = canvas.getContext("2d", { alpha: true });
   if (!context) throw new Error("当前浏览器无法处理图片");
-  context.fillStyle = "#fff9f2";
-  context.fillRect(0, 0, width, height);
+  context.clearRect(0, 0, width, height);
   const rotated = rotatedSize(image, state.rotation);
   const scale = Math.max(width / rotated.width, height / rotated.height) * state.zoom;
   context.save();
@@ -60,6 +59,7 @@ export function BackgroundCropper({ configured }: { configured: boolean }) {
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const sourceUrlRef = useRef<string | null>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
@@ -140,7 +140,8 @@ export function BackgroundCropper({ configured }: { configured: boolean }) {
 
   const crop = crops[target];
   return <section className="panel background-cropper">
-    <div className="background-cropper-heading"><div><span className="eyebrow">自定义背景</span><h2>上传并裁切背景</h2><p className="helper">选择一张原图，分别调整电脑与手机画面。</p></div><label className="button secondary background-file-button"><ImagePlus aria-hidden="true"/>{sourceName ? "更换原图" : "选择原图"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseFile(event.target.files?.[0])}/></label></div>
+    <div className="background-cropper-heading"><div><span className="eyebrow">自定义背景</span><h2>上传并裁切背景</h2><p className="helper">选择一张原图，分别调整电脑与手机画面。</p></div>{sourceName ? <button className="button background-file-button" type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus aria-hidden="true"/>更换原图</button> : null}</div>
+    <input ref={fileInputRef} className="background-source-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseFile(event.target.files?.[0])}/>
     {ready > 0 ? <>
       <div className="crop-target-tabs" role="tablist" aria-label="选择裁切尺寸"><button className={target === "desktop" ? "is-active" : ""} type="button" role="tab" aria-selected={target === "desktop"} onClick={() => setTarget("desktop")}><Monitor aria-hidden="true"/>电脑 16:9</button><button className={target === "mobile" ? "is-active" : ""} type="button" role="tab" aria-selected={target === "mobile"} onClick={() => setTarget("mobile")}><Smartphone aria-hidden="true"/>手机 9:16</button></div>
       <div className={`crop-stage crop-stage-${target}`}><canvas ref={canvasRef} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}/><span><Move aria-hidden="true"/>拖动图片调整位置</span><b>{frames[target].label}</b></div>
@@ -148,9 +149,9 @@ export function BackgroundCropper({ configured }: { configured: boolean }) {
         <label><span>缩放 <b>{crop.zoom.toFixed(2)}×</b></span><input type="range" min="1" max="3" step="0.01" value={crop.zoom} onChange={(event) => updateCrop({ zoom: Number(event.target.value) })}/></label>
         <div><button className="button small ghost" type="button" onClick={() => updateCrop({ rotation: crop.rotation - 90, x: 0, y: 0 })}><RotateCcw aria-hidden="true"/>向左旋转</button><button className="button small ghost" type="button" onClick={() => updateCrop({ rotation: crop.rotation + 90, x: 0, y: 0 })}><RotateCw aria-hidden="true"/>向右旋转</button><button className="button small ghost" type="button" onClick={() => updateCrop({ ...initialCrop })}>重置当前</button></div>
       </div>
-      <div className="crop-output-summary"><Crop aria-hidden="true"/><span>将生成 <b>1920×1080</b> 电脑背景和 <b>1080×1920</b> 手机背景，浏览器会先压缩为 WebP。</span></div>
+      <div className="crop-output-summary"><Crop aria-hidden="true"/><span>将生成 <b>1920×1080</b> 电脑背景和 <b>1080×1920</b> 手机背景，并压缩为保留透明通道的 WebP。</span></div>
       <button className="button primary crop-upload-button" type="button" disabled={pending || !configured} onClick={exportAndUpload}><Upload aria-hidden="true"/>{pending ? "正在上传…" : configured ? "生成并上传两张背景" : "配置 Blob 后可上传"}</button>
-    </> : <div className="crop-empty"><ImagePlus aria-hidden="true"/><h3>选择一张图片开始</h3><p>支持 PNG、JPEG、WebP，原图最大 20 MB。</p></div>}
+    </> : <button className="crop-empty" type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus aria-hidden="true"/><strong>选择一张图片开始</strong><span>支持 PNG、JPEG、WebP，原图最大 20 MB；透明区域会保留。</span></button>}
     {error ? <p className="crop-error" role="alert">{error}</p> : null}
   </section>;
 }
