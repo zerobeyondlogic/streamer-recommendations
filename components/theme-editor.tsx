@@ -106,11 +106,11 @@ export function ThemeEditor({ settings }: { settings: SiteSetting }) {
       <details className="theme-tuning"><summary><SlidersHorizontal aria-hidden="true"/>微调当前主题</summary><div className="stack">
         <div className="color-grid"><Color name="primaryColor" label="主色" value={colors.primary} onChange={(v) => set("primary", v)}/><Color name="secondaryColor" label="辅助色" value={colors.secondary} onChange={(v) => set("secondary", v)}/><Color name="accentColor" label="强调色" value={colors.accent} onChange={(v) => set("accent", v)}/><Color name="backgroundColor" label="页面背景" value={colors.background} onChange={(v) => set("background", v)}/></div>
         <div className="opacity-control-grid">
-          <label>顶部菜单栏 <b>{colors.navOpacity.toFixed(2)}</b><input name="navOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.navOpacity} onChange={(event) => set("navOpacity", Number(event.target.value))}/></label>
-          <label>页面大卡片 <b>{colors.heroOpacity.toFixed(2)}</b><input name="heroOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.heroOpacity} onChange={(event) => set("heroOpacity", Number(event.target.value))}/></label>
-          <label>普通内容卡片 <b>{colors.cardOpacity.toFixed(2)}</b><input name="cardOpacity" type="range" min="0.7" max="1" step="0.01" value={colors.cardOpacity} onChange={(event) => set("cardOpacity", Number(event.target.value))}/></label>
+          <label>顶部菜单栏 <b>{colors.navOpacity.toFixed(2)}</b><input name="navOpacity" type="range" min="0.3" max="1" step="0.01" value={colors.navOpacity} onChange={(event) => set("navOpacity", Number(event.target.value))}/></label>
+          <label>页面大卡片 <b>{colors.heroOpacity.toFixed(2)}</b><input name="heroOpacity" type="range" min="0.3" max="1" step="0.01" value={colors.heroOpacity} onChange={(event) => set("heroOpacity", Number(event.target.value))}/></label>
+          <label>普通内容卡片 <b>{colors.cardOpacity.toFixed(2)}</b><input name="cardOpacity" type="range" min="0.3" max="1" step="0.01" value={colors.cardOpacity} onChange={(event) => set("cardOpacity", Number(event.target.value))}/></label>
         </div>
-        <label>背景遮罩 <b>{colors.overlay.toFixed(2)}</b><input name="backgroundOverlay" type="range" min="0" max="0.85" step="0.01" value={colors.overlay} onChange={(event) => set("overlay", Number(event.target.value))}/></label>
+        <label>背景遮罩 <b>{colors.overlay.toFixed(2)}</b><input name="backgroundOverlay" type="range" min="0" max="0.85" step="0.01" value={colors.overlay} onChange={(event) => set("overlay", Number(event.target.value))}/><span className="helper">覆盖在背景图片上的底色；越高，背景越淡。</span></label>
       </div></details>
       <button className="button primary" type="submit">保存网页主题</button>
     </section>

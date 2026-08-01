@@ -8,7 +8,7 @@ import { MainNavigation } from "@/components/main-navigation";
 import { ThemeModeToggle } from "@/components/theme-mode-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings, unreadNotificationCount } from "@/lib/data";
-import { isAllowedBackgroundUrl, isAllowedSiteIconUrl } from "@/lib/security";
+import { isAllowedBackgroundUrl, isAllowedSiteFontUrl, isAllowedSiteIconUrl } from "@/lib/security";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,16 +28,19 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const customBackgroundUrl = settings.backgroundType === "custom" && isAllowedBackgroundUrl(settings.backgroundImageUrl) ? settings.backgroundImageUrl : null;
   const customMobileBackgroundUrl = settings.backgroundType === "custom" && isAllowedBackgroundUrl(settings.backgroundImageMobileUrl) ? settings.backgroundImageMobileUrl : customBackgroundUrl;
   const siteIconUrl = isAllowedSiteIconUrl(settings.siteIconUrl) ? settings.siteIconUrl : null;
+  const customFontUrl = isAllowedSiteFontUrl(settings.customFontUrl) ? new URL(settings.customFontUrl!).href : null;
   const style = {
     "--color-primary": settings.primaryColor, "--color-secondary": settings.secondaryColor,
     "--color-accent": settings.accentColor, "--color-background": settings.backgroundColor,
     "--nav-opacity": settings.navOpacity, "--hero-opacity": settings.heroOpacity,
     "--card-opacity": settings.cardOpacity, "--background-overlay": settings.backgroundOverlay,
+    ...(customFontUrl ? { "--site-font": '"AkoCustomFont",ui-rounded,"Hiragino Sans GB","Microsoft YaHei UI","PingFang SC",system-ui,sans-serif' } : {}),
     ...(customBackgroundUrl ? { "--custom-background": `url("${customBackgroundUrl}")`, "--custom-background-mobile": `url("${customMobileBackgroundUrl}")` } : {}),
   } as CSSProperties;
+  const customFontCss = customFontUrl ? `@font-face{font-family:"AkoCustomFont";src:url("${customFontUrl}") format("woff2");font-display:swap;font-style:normal;font-weight:100 900;}` : "";
   return (
     <html lang="zh-CN" style={style} suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: colorModeBootScript }}/></head>
+      <head>{customFontCss ? <style dangerouslySetInnerHTML={{ __html: customFontCss }}/> : null}<script dangerouslySetInnerHTML={{ __html: colorModeBootScript }}/></head>
       <body suppressHydrationWarning className={customBackgroundUrl ? "has-custom-background" : `built-in-background ${settings.backgroundImageUrl?.startsWith("builtin:") ? settings.backgroundImageUrl.replace(":", "-") : "builtin-warm"}`}>
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">

@@ -41,3 +41,13 @@ export function isAllowedBackgroundUrl(value: string | null | undefined) {
 }
 
 export const isAllowedSiteIconUrl = isAllowedBackgroundUrl;
+
+export function isAllowedSiteFontUrl(value: string | null | undefined) {
+  if (!isAllowedBackgroundUrl(value)) return false;
+  try {
+    const url = new URL(value!);
+    return url.pathname.startsWith("/site-fonts/") && url.pathname.toLowerCase().endsWith(".woff2");
+  } catch {
+    return false;
+  }
+}

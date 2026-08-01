@@ -3,7 +3,7 @@
 :root { --color-primary:#7259d9; --color-secondary:#ff9f76; --color-accent:#f4c95d; --color-background:#fff9f2; --card-opacity:.94; --background-overlay:.3; --ink:#242436; --muted:#706d7c; --line:#e9dfd8; --shadow:0 12px 34px rgb(75 55 45 / .09); }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
-body { margin:0; min-height:100vh; color:var(--ink); background:var(--color-background); font-family:ui-rounded,"Hiragino Sans GB","Microsoft YaHei UI","PingFang SC",system-ui,sans-serif; }
+body { margin:0; min-height:100vh; color:var(--ink); background:var(--color-background); font-family:var(--site-font,ui-rounded,"Hiragino Sans GB","Microsoft YaHei UI","PingFang SC",system-ui,sans-serif); }
 body.has-custom-background { background-image:var(--custom-background); background-size:cover; background-position:center; background-attachment:fixed; }
 @media(orientation:portrait){body.has-custom-background{background-image:var(--custom-background-mobile,var(--custom-background));background-attachment:scroll}}
 .background-overlay { position:fixed; inset:0; z-index:-2; pointer-events:none; background:rgb(255 249 242 / var(--background-overlay)); }
@@ -197,7 +197,7 @@ body{background:var(--page-background)}
 
 /* Night mode uses the saved brand palette while replacing every reading surface. */
 html[data-color-mode="dark"]{--page-background:color-mix(in srgb,var(--color-background) 8%,#121119);--ink:#f4f0fa;--muted:#b9b2c4;--line:rgb(235 226 247/.15);--shadow:0 14px 38px rgb(0 0 0/.28);--nav-surface:rgb(31 29 41/var(--nav-opacity));--hero-surface:rgb(31 29 41/var(--hero-opacity));--surface:rgb(31 29 41/var(--card-opacity));--surface-solid:#211f2b;--surface-muted:#292632}
-html[data-color-mode="dark"] .background-overlay{background:rgb(13 12 19/.68)}
+html[data-color-mode="dark"] .background-overlay{background:rgb(13 12 19/var(--background-overlay))}
 html[data-color-mode="dark"] .site-header{background:rgb(18 17 25/.9);border-color:var(--line)}
 html[data-color-mode="dark"] .nav-links,html[data-color-mode="dark"] .category-nav>a,html[data-color-mode="dark"] .category-nav-main,html[data-color-mode="dark"] label,html[data-color-mode="dark"] .styled-select-field{color:#c8c1d1}
 html[data-color-mode="dark"] input,html[data-color-mode="dark"] select,html[data-color-mode="dark"] textarea,html[data-color-mode="dark"] .styled-select-trigger,html[data-color-mode="dark"] .host-only-filter,html[data-color-mode="dark"] .icon-button{border-color:var(--line);background:#1d1b25;color:var(--ink);box-shadow:none}

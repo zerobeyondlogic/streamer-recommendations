@@ -9,7 +9,7 @@ import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmiss
 
 export const defaultSettings = {
   id: "default", siteName: "神绮爱的宝箱", siteTagline: "书籍、漫画、电影、动漫和游戏都可以投稿。",
-  siteIconUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
+  siteIconUrl: null, customFontUrl: null, recommendationHeroImageUrl: null, backgroundType: "built_in" as const, backgroundImageUrl: null, backgroundImageMobileUrl: null, primaryColor: "#7259d9", secondaryColor: "#ff9f76",
   accentColor: "#f4c95d", backgroundColor: "#fff9f2", navOpacity: "0.94", heroOpacity: "0.94", cardOpacity: "0.94", backgroundOverlay: "0.30", updatedBy: null, updatedAt: new Date(0),
 };
 

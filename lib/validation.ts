@@ -58,9 +58,9 @@ export const themeSchema = z.object({
   secondaryColor: colorSchema,
   accentColor: colorSchema,
   backgroundColor: colorSchema,
-  navOpacity: z.coerce.number().min(0.7).max(1),
-  heroOpacity: z.coerce.number().min(0.7).max(1),
-  cardOpacity: z.coerce.number().min(0.7).max(1),
+  navOpacity: z.coerce.number().min(0.3).max(1),
+  heroOpacity: z.coerce.number().min(0.3).max(1),
+  cardOpacity: z.coerce.number().min(0.3).max(1),
   backgroundOverlay: z.coerce.number().min(0).max(0.85),
 });
 

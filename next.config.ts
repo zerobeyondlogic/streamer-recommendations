@@ -7,7 +7,7 @@ const contentSecurityPolicy = [
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://*.public.blob.vercel-storage.com",
   `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
   "object-src 'none'",
   "base-uri 'self'",

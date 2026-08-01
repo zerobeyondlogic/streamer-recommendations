@@ -412,7 +412,7 @@ export async function resetThemeAction() {
   const current=await getSettings();
   await getDb().delete(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default"));
   await getDb().delete(siteCopySettings).where((await import("drizzle-orm")).eq(siteCopySettings.id, "default"));
-  if(isBlobStorageConfigured())await Promise.all([current.backgroundType==="custom"?current.backgroundImageUrl:null,current.backgroundType==="custom"?current.backgroundImageMobileUrl:null,current.siteIconUrl,current.recommendationHeroImageUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
+  if(isBlobStorageConfigured())await Promise.all([current.backgroundType==="custom"?current.backgroundImageUrl:null,current.backgroundType==="custom"?current.backgroundImageMobileUrl:null,current.siteIconUrl,current.customFontUrl,current.recommendationHeroImageUrl].filter((url):url is string=>!!url).map((url)=>del(url).catch(()=>undefined)));
   revalidatePath("/", "layout"); go("/host/theme", `已恢复默认主题（由 ${host.username} 操作）`, "success");
 }
 
@@ -504,6 +504,46 @@ export async function removeSiteIconAction() {
     .onConflictDoUpdate({ target: siteSettings.id, set: { siteIconUrl: null, updatedBy: host.id, updatedAt: new Date() } });
   if (current?.siteIconUrl && isBlobStorageConfigured()) await del(current.siteIconUrl).catch(() => undefined);
   revalidatePath("/", "layout"); go("/host/theme", "网页图标已移除", "success");
+}
+
+const MAX_SITE_FONT_SIZE = 4 * 1024 * 1024;
+
+async function siteFontFile(form: FormData) {
+  const file = form.get("siteFont");
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_SITE_FONT_SIZE) throw new Error("字体必须是一个不超过 4 MB 的 WOFF2 文件");
+  const bytes = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (String.fromCharCode(...bytes) !== "wOF2") throw new Error("文件内容不是有效的 WOFF2 字体");
+  return file;
+}
+
+export async function uploadSiteFontAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost();
+  if (!isBlobStorageConfigured()) go("/host/theme", "请先连接 Vercel Blob 并配置真实的 BLOB_READ_WRITE_TOKEN");
+  let font: File;
+  try { font = await siteFontFile(form); }
+  catch (error) { go("/host/theme", error instanceof Error ? error.message : "字体文件无效"); }
+  const [old] = await getDb().select({ customFontUrl: siteSettings.customFontUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  let uploadedUrl: string | null = null;
+  try {
+    const blob = await put(`site-fonts/${crypto.randomUUID()}.woff2`, font, { access: "public", addRandomSuffix: false, contentType: "font/woff2" });
+    uploadedUrl = blob.url;
+    await getDb().insert(siteSettings).values({ id: "default", customFontUrl: blob.url, updatedBy: host.id })
+      .onConflictDoUpdate({ target: siteSettings.id, set: { customFontUrl: blob.url, updatedBy: host.id, updatedAt: new Date() } });
+  } catch (error) {
+    if (uploadedUrl) await del(uploadedUrl).catch(() => undefined);
+    go("/host/theme", error instanceof Error ? `字体上传失败：${error.message}` : "字体上传失败");
+  }
+  if (old?.customFontUrl && old.customFontUrl !== uploadedUrl) await del(old.customFontUrl).catch(() => undefined);
+  revalidatePath("/", "layout"); go("/host/theme", "全站字体已更新", "success");
+}
+
+export async function removeSiteFontAction() {
+  await assertSameOrigin(); const host = await requireHost();
+  const [current] = await getDb().select({ customFontUrl: siteSettings.customFontUrl }).from(siteSettings).where((await import("drizzle-orm")).eq(siteSettings.id, "default")).limit(1);
+  await getDb().insert(siteSettings).values({ id: "default", customFontUrl: null, updatedBy: host.id })
+    .onConflictDoUpdate({ target: siteSettings.id, set: { customFontUrl: null, updatedBy: host.id, updatedAt: new Date() } });
+  if (current?.customFontUrl && isBlobStorageConfigured()) await del(current.customFontUrl).catch(() => undefined);
+  revalidatePath("/", "layout"); go("/host/theme", "已恢复系统字体", "success");
 }
 
 const MAX_RECOMMENDATION_HERO_SIZE = 3 * 1024 * 1024;

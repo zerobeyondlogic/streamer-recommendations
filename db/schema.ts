@@ -148,6 +148,7 @@ export const siteSettings = pgTable("site_settings", {
   siteName: text("site_name").notNull().default("神绮爱的宝箱"),
   siteTagline: text("site_tagline").notNull().default("书籍、漫画、电影、动漫和游戏都可以投稿。"),
   siteIconUrl: text("site_icon_url"),
+  customFontUrl: text("custom_font_url"),
   recommendationHeroImageUrl: text("recommendation_hero_image_url"),
   backgroundType: text("background_type", { enum: ["built_in", "custom"] }).notNull().default("built_in"),
   backgroundImageUrl: text("background_image_url"),
@@ -164,9 +165,9 @@ export const siteSettings = pgTable("site_settings", {
   updatedAt: updatedAt(),
 }, (table) => [
   check("site_settings_background_type_check", sql`${table.backgroundType} in ('built_in','custom')`),
-  check("site_settings_nav_opacity_check", sql`${table.navOpacity} between 0.70 and 1.00`),
-  check("site_settings_hero_opacity_check", sql`${table.heroOpacity} between 0.70 and 1.00`),
-  check("site_settings_card_opacity_check", sql`${table.cardOpacity} between 0.70 and 1.00`),
+  check("site_settings_nav_opacity_check", sql`${table.navOpacity} between 0.30 and 1.00`),
+  check("site_settings_hero_opacity_check", sql`${table.heroOpacity} between 0.30 and 1.00`),
+  check("site_settings_card_opacity_check", sql`${table.cardOpacity} between 0.30 and 1.00`),
   check("site_settings_overlay_check", sql`${table.backgroundOverlay} between 0.00 and 0.85`),
 ]);
 
