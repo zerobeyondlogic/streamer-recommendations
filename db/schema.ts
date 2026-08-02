@@ -22,10 +22,12 @@ export const users = pgTable("users", {
   usernameNormalized: text("username_normalized").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["user", "host"] }).notNull().default("user"),
-  status: text("status", { enum: ["pending", "active", "banned", "deleted"] }).notNull().default("pending"),
+  status: text("status", { enum: ["pending", "rejected", "active", "banned", "deleted"] }).notNull().default("pending"),
   bilibiliUid: text("bilibili_uid"),
   bilibiliVerificationCode: text("bilibili_verification_code"),
   bilibiliVerifiedAt: timestamp("bilibili_verified_at", { withTimezone: true }),
+  bilibiliRejectionMessage: text("bilibili_rejection_message"),
+  bilibiliRejectedAt: timestamp("bilibili_rejected_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -33,8 +35,9 @@ export const users = pgTable("users", {
   uniqueIndex("users_username_normalized_uidx").on(table.usernameNormalized),
   uniqueIndex("users_bilibili_uid_uidx").on(table.bilibiliUid).where(sql`${table.bilibiliUid} is not null`),
   check("users_role_check", sql`${table.role} in ('user', 'host')`),
-  check("users_status_check", sql`${table.status} in ('pending', 'active', 'banned', 'deleted')`),
+  check("users_status_check", sql`${table.status} in ('pending', 'rejected', 'active', 'banned', 'deleted')`),
   check("users_bilibili_uid_check", sql`${table.bilibiliUid} is null or ${table.bilibiliUid} ~ '^[1-9][0-9]{0,19}$'`),
+  check("users_bilibili_rejection_message_check", sql`${table.bilibiliRejectionMessage} is null or char_length(${table.bilibiliRejectionMessage}) between 1 and 500`),
 ]);
 
 export const sessions = pgTable("sessions", {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 export function ConfirmSubmit({
@@ -18,6 +19,7 @@ export function ConfirmSubmit({
 }) {
   const [open, setOpen] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
   useEffect(() => {
@@ -25,19 +27,19 @@ export function ConfirmSubmit({
   }, [open]);
 
   return <>
-    <button className={compact ? "marshmallow-remove-icon" : "button small danger"} type="button" onClick={() => setOpen(true)} aria-label={compact ? label : undefined}>
+    <button ref={triggerRef} className={compact ? "marshmallow-remove-icon" : "button small danger"} type="button" onClick={() => setOpen(true)} aria-label={compact ? label : undefined}>
       {compact ? <X aria-hidden="true" /> : label}
     </button>
-    {open ? <div className="confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+    {open ? createPortal(<div className="confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
         <span className="confirm-mark" aria-hidden="true"><X /></span>
         <h2 id={titleId}>{title}</h2>
         <p>{description}</p>
         <div className="form-actions">
           <button className="button ghost" type="button" ref={cancelRef} onClick={() => setOpen(false)}>取消</button>
-          <button className="button danger" type="submit">{confirmLabel}</button>
+          <button className="button danger" type="button" onClick={() => triggerRef.current?.closest("form")?.requestSubmit()}>{confirmLabel}</button>
         </div>
       </section>
-    </div> : null}
+    </div>, document.body) : null}
   </>;
 }

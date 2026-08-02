@@ -1,6 +1,6 @@
 import "server-only";
 import { compare, hash } from "bcryptjs";
-import { and, eq, gt, like, ne, or } from "drizzle-orm";
+import { and, eq, gt, inArray, like, ne, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -8,10 +8,11 @@ import { getDb } from "@/db";
 import { activityLogs, sessions, users, type User } from "@/db/schema";
 import { SESSION_DAYS } from "./config";
 import { createSessionToken, normalizeUsername, sha256 } from "./security";
-import { authSchema, registrationSchema } from "./validation";
+import { authSchema, bilibiliUidSchema, registrationSchema } from "./validation";
 
 const COOKIE_NAME = "sr_session";
 export type SafeUser = Pick<User, "id" | "username" | "role" | "status" | "bilibiliUid" | "createdAt"> & { mustChangePassword: boolean };
+export type VerificationUser = Pick<User, "id" | "username" | "status" | "bilibiliUid" | "bilibiliVerificationCode" | "bilibiliRejectionMessage">;
 
 const ONE_TIME_PREFIX = "one-time$";
 const CHANGE_REQUIRED_PREFIX = "change-required$";
@@ -61,11 +62,14 @@ export async function login(username: string, password: string) {
   if (!user || !passwordMatches) {
     return { ok: false as const, error: "用户名或密码错误" };
   }
-  if (user.status === "pending") return { ok: false as const, error: "B 站 UID 还在等待神绮爱核验，请先完成主页签名验证" };
+  if (user.status === "pending" || user.status === "rejected") {
+    await setSession(user.id);
+    return { ok: true as const, mustChangePassword: false, verificationRequired: true as const };
+  }
   if (user.status !== "active") return { ok: false as const, error: "用户名或密码错误" };
   if (oneTimeHash) await getDb().update(users).set({ passwordHash: `${CHANGE_REQUIRED_PREFIX}${crypto.randomUUID()}`, updatedAt: new Date() }).where(eq(users.id, user.id));
   await setSession(user.id);
-  return { ok: true as const, mustChangePassword: !!oneTimeHash };
+  return { ok: true as const, mustChangePassword: !!oneTimeHash, verificationRequired: false as const };
 }
 
 export async function logout() {
@@ -88,9 +92,53 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<Saf
   }
 });
 
+export const getVerificationUser = cache(async function getVerificationUser(): Promise<VerificationUser | null> {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  try {
+    const [row] = await getDb().select({
+      id: users.id,
+      username: users.username,
+      status: users.status,
+      bilibiliUid: users.bilibiliUid,
+      bilibiliVerificationCode: users.bilibiliVerificationCode,
+      bilibiliRejectionMessage: users.bilibiliRejectionMessage,
+    }).from(sessions).innerJoin(users, eq(sessions.userId, users.id))
+      .where(and(eq(sessions.tokenHash, sha256(token)), gt(sessions.expiresAt, new Date()), inArray(users.status, ["pending", "rejected"]))).limit(1);
+    return row ?? null;
+  } catch (error) {
+    if (String(error).includes("DATABASE_URL_MISSING")) return null;
+    throw error;
+  }
+});
+
 export async function requireAuthenticatedUser() { const user = await getCurrentUser(); if (!user) redirect("/login"); return user; }
 export async function requireUser() { const user = await requireAuthenticatedUser(); if (user.mustChangePassword) redirect("/change-password"); return user; }
 export async function requireHost() { const user = await requireUser(); if (user.role !== "host") redirect("/"); return user; }
+export async function requireVerificationUser() { const user = await getVerificationUser(); if (!user) redirect("/login"); return user; }
+
+export async function updatePendingBilibiliUid(userId: string, bilibiliUid: string) {
+  const parsed = bilibiliUidSchema.safeParse(bilibiliUid);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "B 站 UID 无效");
+  const verificationCode = `SR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+  try {
+    const rows = await getDb().update(users).set({
+      bilibiliUid: parsed.data,
+      bilibiliVerificationCode: verificationCode,
+      bilibiliVerifiedAt: null,
+      bilibiliRejectionMessage: null,
+      bilibiliRejectedAt: null,
+      status: "pending",
+      updatedAt: new Date(),
+    }).where(and(eq(users.id, userId), inArray(users.status, ["pending", "rejected"]))).returning({ id: users.id });
+    if (!rows.length) throw new Error("账号已经完成核验或无法修改");
+    await getDb().insert(activityLogs).values({ actorUserId: userId, action: "bilibili_uid_resubmitted", metadata: { bilibiliUid: parsed.data } });
+    return verificationCode;
+  } catch (error) {
+    if (String(error).includes("users_bilibili_uid_uidx") || String(error).includes("bilibili_uid")) throw new Error("这个 B 站 UID 已绑定其他账号");
+    throw error;
+  }
+}
 export async function verifyPassword(userId: string, password: string) {
   const [user] = await getDb().select({ hash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
   return !!user && compare(password, user.hash);

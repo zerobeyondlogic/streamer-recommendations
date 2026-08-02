@@ -455,28 +455,45 @@ export async function getPendingBilibiliUsers() {
   }).from(users).where(eq(users.status, "pending")).orderBy(desc(users.createdAt)).limit(200);
 }
 
-export type ManagedUserStatus = "pending" | "active" | "banned" | "deleted";
+export type ManagedUserStatus = "pending" | "rejected" | "active" | "banned" | "deleted";
 
 export async function getManagedUsers(filters: { status?: ManagedUserStatus; q?: string } = {}) {
   const conditions: SQL[] = [];
   if (filters.status) conditions.push(eq(users.status, filters.status));
   if (filters.q) conditions.push(ilike(users.usernameNormalized, `%${filters.q.trim().toLocaleLowerCase("zh-CN")}%`));
-  const [totalRows, activeRows, pendingRows, bannedRows, items] = await Promise.all([
+  const [totalRows, activeRows, pendingRows, rejectedRows, bannedRows, items] = await Promise.all([
     getDb().select({ value: count() }).from(users).where(ne(users.status, "deleted")),
     getDb().select({ value: count() }).from(users).where(eq(users.status, "active")),
     getDb().select({ value: count() }).from(users).where(eq(users.status, "pending")),
+    getDb().select({ value: count() }).from(users).where(eq(users.status, "rejected")),
     getDb().select({ value: count() }).from(users).where(eq(users.status, "banned")),
-    getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, verificationCode: users.bilibiliVerificationCode, createdAt: users.createdAt, deletedAt: users.deletedAt })
+    getDb().select({ id: users.id, username: users.username, role: users.role, status: users.status, bilibiliUid: users.bilibiliUid, verificationCode: users.bilibiliVerificationCode, rejectionMessage: users.bilibiliRejectionMessage, rejectedAt: users.bilibiliRejectedAt, createdAt: users.createdAt, deletedAt: users.deletedAt })
       .from(users).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(users.createdAt)).limit(300),
   ]);
-  return { total: totalRows[0]?.value ?? 0, active: activeRows[0]?.value ?? 0, pending: pendingRows[0]?.value ?? 0, banned: bannedRows[0]?.value ?? 0, items };
+  return { total: totalRows[0]?.value ?? 0, active: activeRows[0]?.value ?? 0, pending: pendingRows[0]?.value ?? 0, rejected: rejectedRows[0]?.value ?? 0, banned: bannedRows[0]?.value ?? 0, items };
 }
 
 export async function approveBilibiliUser(hostId: string, userId: string) {
-  const approved = await getDb().update(users).set({ status: "active", bilibiliVerifiedAt: new Date(), bilibiliVerificationCode: null, updatedAt: new Date() })
+  const approved = await getDb().update(users).set({ status: "active", bilibiliVerifiedAt: new Date(), bilibiliVerificationCode: null, bilibiliRejectionMessage: null, bilibiliRejectedAt: null, updatedAt: new Date() })
     .where(and(eq(users.id, userId), eq(users.status, "pending"), isNotNull(users.bilibiliUid))).returning({ id: users.id });
   if (!approved.length) throw new Error("待验证用户不存在或已经处理");
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "bilibili_user_approved", metadata: { userId } });
+}
+
+export async function rejectBilibiliUser(hostId: string, userId: string, message: string) {
+  const reason = message.trim();
+  if (!reason || reason.length > 500) throw new Error("请填写 1～500 字的回信");
+  const now = new Date();
+  const rejected = await getDb().update(users).set({
+    status: "rejected",
+    bilibiliVerificationCode: null,
+    bilibiliVerifiedAt: null,
+    bilibiliRejectionMessage: reason,
+    bilibiliRejectedAt: now,
+    updatedAt: now,
+  }).where(and(eq(users.id, userId), eq(users.status, "pending"), eq(users.role, "user"))).returning({ id: users.id });
+  if (!rejected.length) throw new Error("待验证用户不存在或已经处理");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "bilibili_user_rejected", metadata: { userId, reason } });
 }
 
 export async function setManagedUserStatus(hostId: string, userId: string, status: "active" | "banned") {
@@ -506,6 +523,8 @@ export async function deleteManagedUser(hostId: string, userId: string) {
       bilibiliUid: null,
       bilibiliVerificationCode: null,
       bilibiliVerifiedAt: null,
+      bilibiliRejectionMessage: null,
+      bilibiliRejectedAt: null,
       deletedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(users.id, userId));

@@ -7,9 +7,9 @@ import { del, put } from "@vercel/blob";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { siteCopySettings, siteSettings } from "@/db/schema";
-import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, resetUserPassword, updateAccountPassword, updateAccountUsername } from "@/lib/auth";
+import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, requireVerificationUser, resetUserPassword, updateAccountPassword, updateAccountUsername, updatePendingBilibiliUid } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish,
+  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
   getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -55,6 +55,7 @@ export async function loginAction(form: FormData) {
     result = await login(value(form, "username"), value(form, "password"));
     if (!result.ok) go("/login", result.error);
   } catch (error) { if (String(error).includes("DATABASE_URL_MISSING")) go("/login", "数据库尚未配置，请先完成部署设置"); throw error; }
+  if (result.verificationRequired) redirect("/verify-bilibili");
   if (result.mustChangePassword) redirect("/change-password");
   const user = await getCurrentUser();
   redirect(user?.role === "host" ? "/host" : "/");
@@ -340,6 +341,29 @@ export async function approveBilibiliUserAction(form: FormData) {
   try { await approveBilibiliUser(host.id, value(form, "userId")); }
   catch (error) { go("/host/users", error instanceof Error ? error.message : "核验失败"); }
   revalidatePath("/host/users"); go("/host/users", "B 站 UID 已核验，用户现在可以登录投稿", "success");
+}
+
+export async function rejectBilibiliUserAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const userId = z.uuid().safeParse(value(form, "userId"));
+  const message = z.string().trim().min(1, "请填写给用户的回信").max(500, "回信最多 500 字").safeParse(value(form, "message"));
+  if (!userId.success || !message.success) go("/host/users?status=pending", message.error?.issues[0]?.message ?? "用户操作无效");
+  try { await rejectBilibiliUser(host.id, userId.data, message.data); }
+  catch (error) { go("/host/users?status=pending", error instanceof Error ? error.message : "账号拒绝失败"); }
+  revalidatePath("/host/users");
+  go("/host/users?status=rejected", "已回信，用户更新 UID 后会重新进入待核验", "success");
+}
+
+export async function updatePendingBilibiliUidAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireVerificationUser();
+  const limit = consumeRateLimit(`bilibili-uid:${user.id}`, 6, 60 * 60_000);
+  if (!limit.ok) go("/verify-bilibili", `修改过于频繁，请 ${limit.retryAfter} 秒后再试`);
+  try { await updatePendingBilibiliUid(user.id, value(form, "bilibiliUid")); }
+  catch (error) { go("/verify-bilibili", error instanceof Error ? error.message : "UID 更新失败"); }
+  revalidatePath("/host/users");
+  go("/verify-bilibili", "UID 已更新，请把新的验证码放到 B 站主页签名", "success");
 }
 
 export async function managedUserStatusAction(form: FormData) {
