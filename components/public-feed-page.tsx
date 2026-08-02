@@ -8,8 +8,8 @@ import {
   categories, categoryLabels, contentStatusLabel, contentStatuses, feedSorts, submissionKind,
   type Category, type FeedSort, type SubmissionKind,
 } from "@/lib/config";
-import { getPublicFeed, getSettings, getSiteCopy } from "@/lib/data";
-import { isAllowedBackgroundUrl, safePageNumber } from "@/lib/security";
+import { getPublicFeed, getSiteCopy } from "@/lib/data";
+import { safePageNumber } from "@/lib/security";
 import { formatDate } from "@/lib/view";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -36,8 +36,7 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
   const sort: FeedSort = feedSorts.includes(rawSort as FeedSort) && !(kind === "wish" && rawSort === "score") ? rawSort as FeedSort : "time";
   const hostRecommended = one(params.hostRecommended) === "1";
   const page = safePageNumber(one(params.page));
-  const [settings, siteCopy, feed] = await Promise.all([
-    getSettings(),
+  const [siteCopy, feed] = await Promise.all([
     getSiteCopy(),
     getPublicFeed({ kind, category, status, q, sort, hostRecommended, page }),
   ]);
@@ -52,17 +51,11 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
   const fixedCategory = kind === "food" ? "food" : kind === "wish" ? "wish" : undefined;
   const rangeLabel = kind === "wish" ? "直播安排" : "推荐范围";
   const rangeOptionLabel = kind === "wish" ? "预定要做的" : "只看神绮爱推荐";
-  const heroImageUrl = isAllowedBackgroundUrl(settings.recommendationHeroImageUrl) ? settings.recommendationHeroImageUrl : null;
-
   return <div className={`page-shell collection-page collection-${kind}`}>
-    {kind === "work" ? <section className="hero">
-      <div className="collection-hero-mark recommendation-hero-mark" aria-hidden="true"><BookOpen/></div>
-      <div className="hero-copy"><span className="eyebrow">{pageCopy.eyebrow}</span><h1>{siteCopy.recommendationHeroTitle}<em>{siteCopy.recommendationHeroAccent}</em></h1><p>{pageCopy.description}</p><div className="hero-actions"><Link className="button primary" href="/submit">{pageCopy.submit} <span>→</span></Link><a className="button ghost" href="#feed">浏览推荐单</a></div></div>
-      <div className={`hero-media${heroImageUrl ? " has-image" : ""}`} aria-hidden="true" style={heroImageUrl ? { backgroundImage: `url("${heroImageUrl}")` } : undefined}/>
-    </section> : <section className="collection-hero">
-      <div className="collection-hero-mark" aria-hidden="true">{kind === "food" ? <Utensils/> : <Sparkles/>}</div>
-      <div><span className="eyebrow">{pageCopy.eyebrow}</span><h1>{pageCopy.title}</h1><p>{pageCopy.description}</p><div className="hero-actions"><Link className="button primary" href={`/submit?kind=${kind}`}>{pageCopy.submit} <span>→</span></Link><a className="button ghost" href="#feed">看看大家的投稿</a></div></div>
-    </section>}
+    <section className="collection-hero">
+      <div className="collection-hero-mark" aria-hidden="true">{kind === "work" ? <BookOpen/> : kind === "food" ? <Utensils/> : <Sparkles/>}</div>
+      <div><span className="eyebrow">{pageCopy.eyebrow}</span><h1>{kind === "work" ? <>{siteCopy.recommendationHeroTitle}<em>{siteCopy.recommendationHeroAccent}</em></> : pageCopy.title}</h1><p>{pageCopy.description}</p><div className="hero-actions"><Link className="button primary" href={kind === "work" ? "/submit" : `/submit?kind=${kind}`}>{pageCopy.submit} <span>→</span></Link><a className="button ghost" href="#feed">{kind === "work" ? "浏览推荐单" : "看看大家的投稿"}</a></div></div>
+    </section>
 
     <section id="feed" className="feed-section">
       <div className="section-heading"><div><span className="eyebrow">{kind === "work" ? category ? `${categoryLabels[category]}专栏` : "推荐单 · 综合" : kind === "food" ? "美食家" : "许愿箱"}</span><h2>{kind === "work" && category ? `${categoryLabels[category]}推荐` : pageCopy.section}</h2></div><span className="live-dot"><i/> {kind === "wish" ? "未完成优先" : "置顶始终优先"}</span></div>

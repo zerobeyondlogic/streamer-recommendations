@@ -3,7 +3,6 @@ import { removeBackgroundAction, resetThemeAction, siteCopyAction } from "@/app/
 import { BackgroundCropper } from "@/components/background-cropper";
 import { SiteIconUploader } from "@/components/site-icon-uploader";
 import { SiteFontUploader } from "@/components/site-font-uploader";
-import { RecommendationHeroUploader } from "@/components/recommendation-hero-uploader";
 import { ThemeEditor } from "@/components/theme-editor";
 import { Notice } from "@/components/notice";
 import { getSettings, getSiteCopy } from "@/lib/data";
@@ -27,7 +26,6 @@ export default async function ThemePage({searchParams}:{searchParams:Promise<{er
     {!blobConfigured ? <section className="panel blob-setup-guide"><Notice type="info">图片上传尚未启用：当前令牌仍是示例占位符。</Notice><h2>连接 Vercel Blob</h2><ol><li>打开 Vercel 项目 → Storage。</li><li>创建并连接一个 <b>Public Blob</b> store。</li><li>确认 Production 环境获得 <code>BLOB_READ_WRITE_TOKEN</code>，然后重新部署。</li><li>本地预览可运行 <code>vercel env pull .env.local</code>。</li></ol><p className="helper">不要把真实令牌提交到 GitHub。</p></section> : null}
     <SiteIconUploader configured={blobConfigured} currentUrl={settings.siteIconUrl}/>
     <SiteFontUploader configured={blobConfigured} currentUrl={settings.customFontUrl}/>
-    <RecommendationHeroUploader configured={blobConfigured} currentUrl={settings.recommendationHeroImageUrl}/>
     <BackgroundCropper configured={blobConfigured}/>
     <div className="host-edit-grid theme-extra">{settings.backgroundType==="custom"?<form className="panel stack" action={removeBackgroundAction}><h2>移除自定义背景</h2><p className="helper">删除电脑和手机背景，恢复暖阳原点。</p><button className="button danger" type="submit">移除背景</button></form>:null}<form className="panel stack" action={resetThemeAction}><h2>恢复默认</h2><p className="helper">恢复默认主题和页面文字。</p><button className="button danger" type="submit">恢复默认</button></form></div>
   </>;
