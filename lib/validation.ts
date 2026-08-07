@@ -40,6 +40,10 @@ export const marshmallowSchema = z.object({
   allowPublic: z.coerce.boolean().default(false),
 });
 
+export const hostMusingSchema = z.object({
+  content: text(2000).min(1, "请写下想说的话"),
+});
+
 export const submissionReviewSchema = z.object({
   submissionId: z.uuid(),
   recommend: z.enum(["recommend", "not_recommend"]),

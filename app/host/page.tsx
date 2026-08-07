@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, Check, Cloud, Inbox, Pin, Play, Timer } from "lucide-react";
+import { Bell, Check, Cloud, Inbox, MessageCircleMore, Pin, Play, Timer } from "lucide-react";
 import { getHostStats } from "@/lib/data";
 export const metadata: Metadata = { title: "工作台" };
 export default async function HostDashboard() {
-  const [newCount,pending,progress,completed,pinned,unread,marshmallowCount] = await getHostStats();
+  const [newCount,pending,progress,completed,pinned,unread,marshmallowCount,hostMusingCount] = await getHostStats();
   const stats=[
     {label:'新投稿',value:newCount,href:'/host/inbox?read=unread',Icon:Inbox},
     {label:'待展示棉花糖',value:marshmallowCount,href:'/host/marshmallows',Icon:Cloud},
+    {label:'已发布碎碎念',value:hostMusingCount,href:'/host/musings',Icon:MessageCircleMore},
     {label:'待体验',value:pending,href:'/host/library?status=pending',Icon:Timer},
     {label:'进行中',value:progress,href:'/host/library?status=in_progress',Icon:Play},
     {label:'已完成',value:completed,href:'/host/library?status=completed',Icon:Check},

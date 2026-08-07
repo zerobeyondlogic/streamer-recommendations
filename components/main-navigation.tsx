@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, ChevronDown, Cloud, Film, Gamepad2, Images, Shapes, Sparkles, Tv, Utensils } from "lucide-react";
+import { BookOpen, ChevronDown, Cloud, Film, Gamepad2, Images, MessageCircleMore, Shapes, Sparkles, Tv, Utensils } from "lucide-react";
 import { categoryLabels, primaryCategories } from "@/lib/config";
 
 export function MainNavigation() {
@@ -43,5 +43,6 @@ export function MainNavigation() {
     <Link className={pathname === "/wishes" ? "is-active" : undefined} aria-current={pathname === "/wishes" ? "page" : undefined} href="/wishes"><Sparkles className="category-icon" aria-hidden="true"/><span>许愿箱</span></Link>
     <Link className={pathname === "/food" ? "is-active" : undefined} aria-current={pathname === "/food" ? "page" : undefined} href="/food"><Utensils className="category-icon" aria-hidden="true"/><span>美食家</span></Link>
     <Link className={pathname === "/marshmallow" ? "is-active" : undefined} aria-current={pathname === "/marshmallow" ? "page" : undefined} href="/marshmallow"><Cloud className="category-icon" aria-hidden="true"/><span>棉花糖</span></Link>
+    <Link className={pathname === "/musings" ? "is-active" : undefined} aria-current={pathname === "/musings" ? "page" : undefined} href="/musings"><MessageCircleMore className="category-icon" aria-hidden="true"/><span>碎碎念</span></Link>
   </div>;
 }

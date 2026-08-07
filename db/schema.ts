@@ -107,6 +107,18 @@ export const marshmallows = pgTable("marshmallows", {
   index("marshmallows_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+export const hostMusings = pgTable("host_musings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hostUserId: uuid("host_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  content: text("content").notNull(),
+  pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  check("host_musings_content_length_check", sql`char_length(${table.content}) between 1 and 2000`),
+  index("host_musings_public_feed_idx").on(table.pinnedAt, table.createdAt),
+]);
+
 export const submissionReviews = pgTable("submission_reviews", {
   id: uuid("id").primaryKey().defaultRandom(),
   submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
@@ -213,6 +225,7 @@ export const activityLogs = pgTable("activity_logs", {
 export type User = typeof users.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
+export type HostMusing = typeof hostMusings.$inferSelect;
 export type SubmissionReview = typeof submissionReviews.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
 export type SiteCopySetting = typeof siteCopySettings.$inferSelect;

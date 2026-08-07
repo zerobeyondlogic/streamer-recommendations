@@ -845,3 +845,55 @@ html[data-color-mode="dark"] .comment-count{
   }
   .filter-disclosure.is-open .filter-disclosure-toggle{border-bottom:0}
 }
+
+/* Host musings: a read-only public timeline with a separate host-only editor. */
+.musings-page{padding-top:0}
+.musings-hero{margin-bottom:54px}
+.musings-section{max-width:900px;margin:0 auto}
+.musings-list{display:grid;gap:16px}
+.musing-card{padding:28px 30px}
+.musing-card.is-pinned{border-color:color-mix(in srgb,var(--color-primary) 32%,var(--line))}
+.musing-pinned{display:inline-flex;align-items:center;gap:6px;margin-bottom:18px;color:var(--color-primary);font-size:.74rem;font-weight:900}
+.musing-pinned svg{width:15px;height:15px}
+.musing-content,.host-musing-content{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}
+.musing-content{font-size:1.03rem}
+.musing-card footer{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-top:22px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:.72rem}
+
+.host-musing-compose{max-width:820px;margin-bottom:34px}
+.host-musing-compose textarea{min-height:150px}
+.host-musing-compose .button{justify-self:start}
+.host-musing-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}
+.host-musing-heading h2{margin:0;font-size:1.35rem}
+.host-musing-heading span{color:var(--muted);font-size:.78rem;font-weight:800}
+.host-musing-card{padding:24px}
+.host-musing-card.is-pinned{border-color:color-mix(in srgb,var(--color-primary) 30%,var(--line))}
+.host-musing-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;color:var(--muted);font-size:.72rem}
+.host-musing-meta>span{display:inline-flex;align-items:center;gap:5px;color:var(--color-primary);font-weight:900}
+.host-musing-meta svg{width:14px;height:14px}
+.host-musing-content{margin:20px 0;font-size:.96rem}
+.host-musing-actions{align-items:flex-start}
+.host-musing-editor{min-width:110px}
+.host-musing-editor>summary{min-height:40px;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 14px;border-radius:12px;color:var(--color-primary);font-size:.78rem;font-weight:900;cursor:pointer;list-style:none}
+.host-musing-editor>summary::-webkit-details-marker{display:none}
+.host-musing-editor>summary svg{width:16px;height:16px}
+.host-musing-editor[open]{width:100%;order:2;margin-top:4px}
+.host-musing-editor[open]>summary{width:max-content;margin-bottom:10px;background:color-mix(in srgb,var(--color-primary) 9%,transparent)}
+.host-musing-editor form{padding:16px;border-radius:16px;background:var(--filter-surface);backdrop-filter:var(--filter-backdrop-filter)}
+.host-musing-editor textarea{min-height:130px}
+
+html[data-color-mode="dark"] .musing-card.is-pinned,
+html[data-color-mode="dark"] .host-musing-card.is-pinned{border-color:color-mix(in srgb,var(--color-primary) 48%,var(--line))}
+
+@media(max-width:860px){
+  .category-nav{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+
+@media(max-width:520px){
+  .category-nav{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .musings-hero{margin-bottom:40px}
+  .musing-card,.host-musing-card{padding:20px}
+  .host-musing-compose .button{width:100%}
+  .host-musing-actions{align-items:stretch;flex-direction:column}
+  .host-musing-actions>form,.host-musing-actions>form .button,.host-musing-editor{width:100%}
+  .host-musing-editor>summary{width:100%}
+}

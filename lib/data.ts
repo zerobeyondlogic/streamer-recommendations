@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { cache } from "react";
 import { getDb } from "@/db";
-import { activityLogs, hostReplies, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { activityLogs, hostMusings, hostReplies, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, submissionKind, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
 import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmissionAuthor } from "./transitions";
@@ -186,6 +186,77 @@ export async function getPublicMarshmallows(page = 1) {
   return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
 }
 
+export async function getPublicHostMusings(page = 1) {
+  const safePage = safePageNumber(page);
+  try {
+    const rows = await getDb().select({
+      id: hostMusings.id,
+      content: hostMusings.content,
+      pinnedAt: hostMusings.pinnedAt,
+      createdAt: hostMusings.createdAt,
+      updatedAt: hostMusings.updatedAt,
+    }).from(hostMusings)
+      .orderBy(
+        desc(sql`${hostMusings.pinnedAt} is not null`),
+        desc(hostMusings.pinnedAt),
+        desc(hostMusings.createdAt),
+        desc(hostMusings.id),
+      )
+      .limit(51).offset((safePage - 1) * 50);
+    return { items: rows.slice(0, 50), hasMore: rows.length > 50 };
+  } catch (error) {
+    if (String(error).includes("DATABASE_URL_MISSING") || String(error).includes("host_musings")) return { items: [], hasMore: false };
+    throw error;
+  }
+}
+
+export async function getHostMusings() {
+  return getDb().select({
+    id: hostMusings.id,
+    content: hostMusings.content,
+    pinnedAt: hostMusings.pinnedAt,
+    createdAt: hostMusings.createdAt,
+    updatedAt: hostMusings.updatedAt,
+  }).from(hostMusings)
+    .orderBy(
+      desc(sql`${hostMusings.pinnedAt} is not null`),
+      desc(hostMusings.pinnedAt),
+      desc(hostMusings.createdAt),
+      desc(hostMusings.id),
+    )
+    .limit(500);
+}
+
+export async function createHostMusing(hostId: string, content: string) {
+  const [row] = await getDb().insert(hostMusings).values({ hostUserId: hostId, content }).returning({ id: hostMusings.id });
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "host_musing_created", metadata: { hostMusingId: row.id } });
+  return row;
+}
+
+export async function updateHostMusing(hostId: string, hostMusingId: string, content: string) {
+  const rows = await getDb().update(hostMusings).set({ content, updatedAt: new Date() })
+    .where(and(eq(hostMusings.id, hostMusingId), eq(hostMusings.hostUserId, hostId)))
+    .returning({ id: hostMusings.id });
+  if (!rows.length) throw new Error("碎碎念不存在或无权修改");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "host_musing_updated", metadata: { hostMusingId } });
+}
+
+export async function setHostMusingPinned(hostId: string, hostMusingId: string, pin: boolean) {
+  const rows = await getDb().update(hostMusings).set({ pinnedAt: pin ? new Date() : null })
+    .where(and(eq(hostMusings.id, hostMusingId), eq(hostMusings.hostUserId, hostId)))
+    .returning({ id: hostMusings.id });
+  if (!rows.length) throw new Error("碎碎念不存在或无权置顶");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: pin ? "host_musing_pinned" : "host_musing_unpinned", metadata: { hostMusingId } });
+}
+
+export async function deleteHostMusing(hostId: string, hostMusingId: string) {
+  const rows = await getDb().delete(hostMusings)
+    .where(and(eq(hostMusings.id, hostMusingId), eq(hostMusings.hostUserId, hostId)))
+    .returning({ id: hostMusings.id });
+  if (!rows.length) throw new Error("碎碎念不存在或无权删除");
+  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "host_musing_deleted", metadata: { hostMusingId } });
+}
+
 export type MarshmallowHostStatus = "all" | "pending" | "read" | "published" | "private" | "deleted";
 
 export async function getHostMarshmallows(status: MarshmallowHostStatus = "pending") {
@@ -335,7 +406,7 @@ export async function markNotificationRead(userId: string, notificationId: strin
 export async function markAllNotificationsRead(userId: string) { return getDb().update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.userId, userId), isNull(notifications.readAt))); }
 
 export async function getHostStats() {
-  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unreadRows, marshmallowRows] = await Promise.all([
+  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unreadRows, marshmallowRows, hostMusingRows] = await Promise.all([
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.source, "user"), isNull(submissions.hostReadAt), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "pending"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "in_progress"), isNull(submissions.deletedAt))),
@@ -343,8 +414,9 @@ export async function getHostStats() {
     getDb().select({ value: count() }).from(submissions).where(and(isNotNull(submissions.pinnedAt), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(notifications).where(isNull(notifications.readAt)),
     getDb().select({ value: count() }).from(marshmallows).where(and(isNull(marshmallows.readAt), isNull(marshmallows.deletedAt))),
+    getDb().select({ value: count() }).from(hostMusings),
   ]);
-  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value];
+  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value, hostMusingRows[0].value];
 }
 
 export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; kind?: SubmissionKind; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Cloud, DatabaseBackup, Home, Inbox, LayoutDashboard, Library, MonitorPlay, Paintbrush, Plus, Sparkles, UsersRound } from "lucide-react";
+import { Cloud, DatabaseBackup, Home, Inbox, LayoutDashboard, Library, MessageCircleMore, MonitorPlay, Paintbrush, Plus, Sparkles, UsersRound } from "lucide-react";
 
 const groups = [
   {
@@ -10,6 +10,12 @@ const groups = [
     items: [
       { href: "/host/inbox", label: "投稿审核", Icon: Inbox },
       { href: "/host/library", label: "内容库", Icon: Library },
+    ],
+  },
+  {
+    label: "主播内容",
+    items: [
+      { href: "/host/musings", label: "碎碎念", Icon: MessageCircleMore },
     ],
   },
   {
@@ -36,7 +42,7 @@ export function HostSidebar({ siteName }: { siteName: string }) {
     <div className="host-sidebar-brand"><span className="host-sidebar-mark"><Sparkles aria-hidden="true"/></span><span><strong>主播工作台</strong><small>{siteName}</small></span></div>
     <details className="host-create-menu">
       <summary><Plus aria-hidden="true"/>新建内容</summary>
-      <div><Link href="/host/recommend">推荐单</Link><Link href="/host/recommend?kind=wish">许愿箱</Link><Link href="/host/recommend?kind=food">美食家</Link></div>
+      <div><Link href="/host/recommend">推荐单</Link><Link href="/host/recommend?kind=wish">许愿箱</Link><Link href="/host/recommend?kind=food">美食家</Link><Link href="/host/musings">碎碎念</Link></div>
     </details>
     <nav aria-label="工作台导航">
       <Link className={pathname === "/host" ? "is-active" : ""} href="/host"><LayoutDashboard aria-hidden="true"/><span>概览</span></Link>

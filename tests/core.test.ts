@@ -2,7 +2,7 @@ import { describe,expect,it } from "vitest";
 import { contentStatusLabel, submissionKind } from "../lib/config";
 import { isAllowedBackgroundUrl,isAllowedSiteFontUrl,isAllowedSiteIconUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
 import { clearRateLimitsForTests,consumeRateLimit } from "../lib/rate-limit";
-import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
+import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,hostMusingSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
 import { themePresetIds,themePresets } from "../lib/themes";
 import { tokenizeBvText } from "../lib/bilibili";
@@ -27,6 +27,7 @@ describe("账号与输入安全",()=>{
   it("重定向只允许本站路径",()=>{expect(safeLocalPath("/host/library?status=pending")).toBe("/host/library?status=pending");expect(safeLocalPath("//evil.example")).toBe("/");expect(safeLocalPath("https://evil.example")).toBe("/")});
   it("实例限流器会阻止窗口内的超额请求",()=>{clearRateLimitsForTests();expect(consumeRateLimit("login:test",1,60_000).ok).toBe(true);expect(consumeRateLimit("login:test",1,60_000).ok).toBe(false)});
   it("棉花糖默认私密并拒绝空内容",()=>{expect(marshmallowSchema.parse({content:"  想说的话  "})).toEqual({content:"想说的话",allowPublic:false});expect(marshmallowSchema.safeParse({content:"   "}).success).toBe(false)});
+  it("碎碎念会清理首尾空格并限制为 2000 字",()=>{expect(hostMusingSchema.parse({content:"  今天很好  "})).toEqual({content:"今天很好"});expect(hostMusingSchema.safeParse({content:"   "}).success).toBe(false);expect(hostMusingSchema.safeParse({content:"念".repeat(2001)}).success).toBe(false)});
   it("美食家和许愿箱沿用安全的统一投稿格式",()=>{expect(submissionSchema.safeParse({category:"food",title:"小馆招牌面",description:"很好吃",externalUrl:"",anonymousPublic:false}).success).toBe(true);expect(submissionSchema.safeParse({category:"wish",title:"许愿台词回读",description:"",externalUrl:"",anonymousPublic:false}).success).toBe(true)});
   it("页面主要文案有长度限制且必填标题不能为空",()=>expect(siteCopySchema.safeParse({siteName:"站点",siteTagline:"说明",recommendationHeroTitle:"",recommendationHeroAccent:"推荐给神绮爱。",recommendationTagline:"副标题",recommendationSectionTitle:"推荐",foodHeroTitle:"必吃",foodTagline:"",foodSectionTitle:"美食",wishHeroTitle:"许愿",wishTagline:"",wishSectionTitle:"愿望",marshmallowHeroTitle:"棉花糖",marshmallowTagline:"",marshmallowSectionTitle:"上墙"}).success).toBe(false));
 });

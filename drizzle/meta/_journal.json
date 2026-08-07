@@ -134,6 +134,13 @@
       "when": 1785680898578,
       "tag": "0018_milky_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786121574262,
+      "tag": "0019_fearless_overlord",
+      "breakpoints": true
     }
   ]
 }

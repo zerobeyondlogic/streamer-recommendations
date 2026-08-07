@@ -9,12 +9,12 @@ import { getDb } from "@/db";
 import { siteCopySettings, siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, requireVerificationUser, resetUserPassword, updateAccountPassword, updateAccountUsername, updatePendingBilibiliUid } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostRecommendation, createMarshmallow, createSubmission, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
+  approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setHostMusingPinned, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin, safeLocalPath } from "@/lib/security";
-import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
 import { categories, contentStatuses, submissionKind } from "@/lib/config";
 import { themePresets } from "@/lib/themes";
 import { isBlobStorageConfigured } from "@/lib/blob";
@@ -25,6 +25,7 @@ function go(path: string, message: string, type: "error" | "success" = "error"):
   redirect(`${pathname}${pathname.includes("?") ? "&" : "?"}${type}=${encodeURIComponent(message)}${fragment ? `#${fragment}` : ""}`);
 }
 function revalidatePublicCollections() { revalidatePath("/"); revalidatePath("/food"); revalidatePath("/wishes"); }
+function revalidateHostMusings() { revalidatePath("/musings"); revalidatePath("/host/musings"); }
 async function assertSameOrigin() {
   const h = await headers();
   const origin = h.get("origin");
@@ -287,6 +288,57 @@ export async function createHostRecommendationAction(form: FormData) {
   catch (error) { go(returnTo, error instanceof Error ? error.message : "发布失败"); }
   revalidatePublicCollections(); revalidatePath("/host/library");
   go(`/host/submission/${row.id}`, "神绮爱原创推荐已直接公开", "success");
+}
+
+function hostMusingId(form: FormData) {
+  const parsed = z.uuid().safeParse(value(form, "hostMusingId"));
+  return parsed.success ? parsed.data : null;
+}
+
+export async function createHostMusingAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const parsed = hostMusingSchema.safeParse({ content: value(form, "content") });
+  if (!parsed.success) go("/host/musings", parsed.error.issues[0]?.message ?? "内容无效");
+  try { await createHostMusing(host.id, parsed.data.content); }
+  catch (error) { go("/host/musings", error instanceof Error ? error.message : "发布失败"); }
+  revalidateHostMusings();
+  go("/host/musings", "碎碎念已发布", "success");
+}
+
+export async function updateHostMusingAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const id = hostMusingId(form);
+  const parsed = hostMusingSchema.safeParse({ content: value(form, "content") });
+  if (!id || !parsed.success) go("/host/musings", parsed.error?.issues[0]?.message ?? "碎碎念编号无效");
+  try { await updateHostMusing(host.id, id, parsed.data.content); }
+  catch (error) { go("/host/musings", error instanceof Error ? error.message : "修改失败"); }
+  revalidateHostMusings();
+  go("/host/musings", "碎碎念已更新", "success");
+}
+
+export async function pinHostMusingAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const id = hostMusingId(form);
+  if (!id) go("/host/musings", "碎碎念编号无效");
+  const pin = value(form, "pin") === "true";
+  try { await setHostMusingPinned(host.id, id, pin); }
+  catch (error) { go("/host/musings", error instanceof Error ? error.message : "置顶失败"); }
+  revalidateHostMusings();
+  go("/host/musings", pin ? "已置顶" : "已取消置顶", "success");
+}
+
+export async function deleteHostMusingAction(form: FormData) {
+  await assertSameOrigin();
+  const host = await requireHost();
+  const id = hostMusingId(form);
+  if (!id) go("/host/musings", "碎碎念编号无效");
+  try { await deleteHostMusing(host.id, id); }
+  catch (error) { go("/host/musings", error instanceof Error ? error.message : "删除失败"); }
+  revalidateHostMusings();
+  go("/host/musings", "碎碎念已永久删除", "success");
 }
 
 export async function deleteOwnSubmissionAction(form: FormData) {
