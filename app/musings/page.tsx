@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MessageCircleMore, Pin } from "lucide-react";
 import { BvText } from "@/components/bv-text";
-import { getPublicHostMusings } from "@/lib/data";
+import { getPublicHostMusings, getSiteCopy } from "@/lib/data";
 import { safePageNumber } from "@/lib/security";
 import { formatDate } from "@/lib/view";
 
@@ -12,16 +12,16 @@ export const dynamic = "force-dynamic";
 export default async function MusingsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const params = await searchParams;
   const page = safePageNumber(params.page);
-  const feed = await getPublicHostMusings(page);
+  const [feed, siteCopy] = await Promise.all([getPublicHostMusings(page), getSiteCopy()]);
 
   return <div className="page-shell musings-page">
     <header className="collection-hero musings-hero">
       <span className="collection-hero-mark"><MessageCircleMore aria-hidden="true"/></span>
-      <div><span className="eyebrow">Host notes</span><h1>碎碎念</h1><p>一些近况、随想，和想说的话。</p></div>
+      <div><span className="eyebrow">Host notes</span><h1>{siteCopy.musingsHeroTitle}</h1><p>{siteCopy.musingsTagline}</p></div>
     </header>
 
     <section className="musings-section" aria-labelledby="musings-title">
-      <div className="section-heading"><div><span className="eyebrow">时间线</span><h2 id="musings-title">最近在想</h2></div><span className="live-dot"><i/> 最新优先</span></div>
+      <div className="section-heading"><div><span className="eyebrow">时间线</span><h2 id="musings-title">{siteCopy.musingsSectionTitle}</h2></div><span className="live-dot"><i/> 最新优先</span></div>
       <div className="musings-list">
         {feed.items.map((item) => <article className={`panel musing-card${item.pinnedAt ? " is-pinned" : ""}`} key={item.id}>
           {item.pinnedAt ? <span className="musing-pinned"><Pin aria-hidden="true"/> 置顶</span> : null}

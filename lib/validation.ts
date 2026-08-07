@@ -83,6 +83,7 @@ export const siteCopySchema = z.object({
   foodHeroTitle: text(100).min(1), foodTagline: text(180), foodSectionTitle: text(80).min(1),
   wishHeroTitle: text(100).min(1), wishTagline: text(180), wishSectionTitle: text(80).min(1),
   marshmallowHeroTitle: text(100).min(1), marshmallowTagline: text(180), marshmallowSectionTitle: text(80).min(1),
+  musingsHeroTitle: text(100).min(1), musingsTagline: text(180), musingsSectionTitle: text(80).min(1),
 });
 
 export const hostUpdateSchema = z.object({

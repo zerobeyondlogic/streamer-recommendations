@@ -209,6 +209,9 @@ export const siteCopySettings = pgTable("site_copy_settings", {
   marshmallowHeroTitle: text("marshmallow_hero_title").notNull().default("给神绮爱一颗棉花糖"),
   marshmallowTagline: text("marshmallow_tagline").notNull().default("写下想说的话，默认仅神绮爱可见。"),
   marshmallowSectionTitle: text("marshmallow_section_title").notNull().default("已上墙的棉花糖"),
+  musingsHeroTitle: text("musings_hero_title").notNull().default("碎碎念"),
+  musingsTagline: text("musings_tagline").notNull().default("一些近况、随想，和想说的话。"),
+  musingsSectionTitle: text("musings_section_title").notNull().default("最近在想"),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: updatedAt(),
 });

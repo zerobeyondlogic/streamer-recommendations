@@ -19,6 +19,7 @@ export const defaultSiteCopy = {
   foodHeroTitle: "好吃的，当然要一起分享。", foodTagline: "推荐值得一吃的店铺、菜品和味道。", foodSectionTitle: "大家的美食推荐",
   wishHeroTitle: "下一次直播，想和神绮爱做什么？", wishTagline: "许愿台词回读、一起看作品，或任何直播企划。", wishSectionTitle: "等待实现的愿望",
   marshmallowHeroTitle: "给神绮爱一颗棉花糖", marshmallowTagline: "写下想说的话，默认仅神绮爱可见。", marshmallowSectionTitle: "已上墙的棉花糖",
+  musingsHeroTitle: "碎碎念", musingsTagline: "一些近况、随想，和想说的话。", musingsSectionTitle: "最近在想",
   updatedBy: null, updatedAt: new Date(0),
 };
 
@@ -46,7 +47,25 @@ export const getSettings = cache(async function getSettings() {
 
 export const getSiteCopy = cache(async function getSiteCopy() {
   try { const [value] = await getDb().select().from(siteCopySettings).where(eq(siteCopySettings.id, "default")).limit(1); return value ?? defaultSiteCopy; }
-  catch (error) { if (String(error).includes("DATABASE_URL_MISSING") || String(error).includes("site_copy_settings")) return defaultSiteCopy; throw error; }
+  catch (error) {
+    const message = String(error);
+    if (message.includes("DATABASE_URL_MISSING")) return defaultSiteCopy;
+    if (message.includes("musings_hero_title")) {
+      const legacyFields = {
+        id: siteCopySettings.id,
+        recommendationHeroTitle: siteCopySettings.recommendationHeroTitle, recommendationHeroAccent: siteCopySettings.recommendationHeroAccent,
+        recommendationTagline: siteCopySettings.recommendationTagline, recommendationSectionTitle: siteCopySettings.recommendationSectionTitle,
+        foodHeroTitle: siteCopySettings.foodHeroTitle, foodTagline: siteCopySettings.foodTagline, foodSectionTitle: siteCopySettings.foodSectionTitle,
+        wishHeroTitle: siteCopySettings.wishHeroTitle, wishTagline: siteCopySettings.wishTagline, wishSectionTitle: siteCopySettings.wishSectionTitle,
+        marshmallowHeroTitle: siteCopySettings.marshmallowHeroTitle, marshmallowTagline: siteCopySettings.marshmallowTagline, marshmallowSectionTitle: siteCopySettings.marshmallowSectionTitle,
+        updatedBy: siteCopySettings.updatedBy, updatedAt: siteCopySettings.updatedAt,
+      };
+      const [legacy] = await getDb().select(legacyFields).from(siteCopySettings).where(eq(siteCopySettings.id, "default")).limit(1);
+      return legacy ? { ...legacy, musingsHeroTitle: defaultSiteCopy.musingsHeroTitle, musingsTagline: defaultSiteCopy.musingsTagline, musingsSectionTitle: defaultSiteCopy.musingsSectionTitle } : defaultSiteCopy;
+    }
+    if (message.includes("site_copy_settings")) return defaultSiteCopy;
+    throw error;
+  }
 });
 
 export async function getPublicFeed(filters: { kind?: SubmissionKind; category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number } = {}) {

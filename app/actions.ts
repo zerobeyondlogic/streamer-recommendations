@@ -500,7 +500,7 @@ export async function siteCopyAction(form: FormData) {
   if (!parsed.success) go("/host/theme", parsed.error.issues[0]?.message ?? "页面文案无效");
   const { siteName, siteTagline, ...copy } = parsed.data;
   await updateSiteCopy(host.id, { siteName, siteTagline }, copy);
-  revalidatePath("/", "layout"); revalidatePath("/food"); revalidatePath("/wishes"); revalidatePath("/marshmallow");
+  revalidatePath("/", "layout"); revalidatePath("/food"); revalidatePath("/wishes"); revalidatePath("/marshmallow"); revalidatePath("/musings");
   go("/host/theme", "页面文案已保存", "success");
 }
 
