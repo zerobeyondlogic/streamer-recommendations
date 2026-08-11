@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Cloud, MessageCircle, Pencil, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { z } from "zod";
-import { deleteSubmissionReviewAction } from "@/app/actions";
+import { deleteSubmissionCommentAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { ReviewEditor } from "@/components/review-editor";
@@ -48,29 +48,29 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
       <div className="community-breakdown"><span><ThumbsUp aria-hidden="true"/>{item.recommendCount} 人{positiveLabel}</span><span><ThumbsDown aria-hidden="true"/>{item.notRecommendCount} 人{negativeLabel}</span></div>
     </section>
 
-    {!ownReview ? <section className="review-compose-section">
+    {!ownReview?.comment ? <section className="review-compose-section">
       <div className="section-heading"><div><span className="eyebrow">Your review</span><h2>{kind === "wish" ? "表达你的支持" : "写下你的评价"}</h2></div></div>
-      {user ? <ReviewEditor submissionId={item.id} kind={kind}/> : <div className="panel review-login-callout"><p>登录后即可{kind === "wish" ? "支持并留言" : "推荐并评论"}。</p><Link className="button primary" href="/login">登录评价</Link></div>}
+      {user ? <ReviewEditor submissionId={item.id} kind={kind} initial={ownReview}/> : <div className="panel review-login-callout"><p>登录后可以单独{kind === "wish" ? "支持或留言" : "推荐或评论"}。</p><Link className="button primary" href="/login">登录评价</Link></div>}
     </section> : null}
 
     <section className="community-comments" id="comments" aria-labelledby="community-comments-title">
       <div className="section-heading"><div><span className="eyebrow">User reviews</span><h2 id="community-comments-title">{kind === "wish" ? "愿望留言" : "用户评论"}</h2></div><span className="comment-count"><MessageCircle aria-hidden="true"/>{item.commentCount} 条文字评论</span></div>
       <div className="community-comment-list">
-        {ownReview && user ? <article className={`panel community-comment-card own-community-review ${ownReview.recommend ? "is-recommended" : "is-not-recommended"}`}>
-          <header><span className="review-author review-author-own">{user.username}<small>我的评价</small></span><span className="review-verdict">{ownReview.recommend ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : <><ThumbsDown aria-hidden="true"/>{negativeLabel}</>}</span></header>
-          <SpoilerText className={`community-comment-copy ${ownReview.comment ? "" : "muted"}`}>{ownReview.comment ?? "暂未填写文字评论。"}</SpoilerText>
+        {ownReview?.comment && user ? <article className={`panel community-comment-card own-community-review ${ownReview.recommend === true ? "is-recommended" : ownReview.recommend === false ? "is-not-recommended" : "is-comment-only"}`}>
+          <header><span className="review-author review-author-own">{user.username}<small>我的评论</small></span><span className="review-verdict">{ownReview.recommend === true ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : ownReview.recommend === false ? <><ThumbsDown aria-hidden="true"/>{negativeLabel}</> : <><MessageCircle aria-hidden="true"/>仅评论</>}</span></header>
+          <SpoilerText className="community-comment-copy">{ownReview.comment}</SpoilerText>
           <footer>更新于 {formatDate(ownReview.updatedAt)}</footer>
           <div className="own-review-actions">
             <details className="own-review-edit"><summary><Pencil aria-hidden="true"/>修改</summary><ReviewEditor submissionId={item.id} kind={kind} initial={ownReview}/></details>
-            <form action={deleteSubmissionReviewAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit"><X aria-hidden="true"/>撤回评价</button></form>
+            <form action={deleteSubmissionCommentAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit"><X aria-hidden="true"/>删除评论</button></form>
           </div>
         </article> : null}
-        {reviews.map((review) => <article className={`panel community-comment-card ${review.recommend ? "is-recommended" : "is-not-recommended"}`} key={review.id}>
-        <header><span className="review-author">{review.username}</span><span className="review-verdict">{review.recommend ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : <><ThumbsDown aria-hidden="true"/>{negativeLabel}</>}</span></header>
+        {reviews.map((review) => <article className={`panel community-comment-card ${review.recommend === true ? "is-recommended" : review.recommend === false ? "is-not-recommended" : "is-comment-only"}`} key={review.id}>
+        <header><span className="review-author">{review.username}</span><span className="review-verdict">{review.recommend === true ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : review.recommend === false ? <><ThumbsDown aria-hidden="true"/>{negativeLabel}</> : <><MessageCircle aria-hidden="true"/>仅评论</>}</span></header>
         <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
         <footer>评价于 {formatDate(review.updatedAt)}</footer>
       </article>)}</div>
-      {!ownReview && !reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
+      {!ownReview?.comment && !reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
       {(reviewPage > 1 || reviewHasMore) ? <nav className="marshmallow-pagination" aria-label="评论分页">{reviewPage > 1 ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage - 1}#comments`}>← 上一页</Link> : <span/>}<strong>第 {reviewPage} 页</strong>{reviewHasMore ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage + 1}#comments`}>下一页 →</Link> : <span/>}</nav> : null}
     </section>
   </div>;

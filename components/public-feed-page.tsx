@@ -1,14 +1,16 @@
 import Link from "next/link";
-import { BookOpen, Cloud, Sparkles, ThumbsUp, Utensils } from "lucide-react";
+import { BookOpen, Cloud, Sparkles, Utensils } from "lucide-react";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
 import { FilterSelect } from "@/components/filter-select";
 import { MobileFilterDisclosure } from "@/components/mobile-filter-disclosure";
+import { QuickVoteControls } from "@/components/quick-vote-controls";
 import {
   categories, categoryLabels, contentStatusLabel, contentStatuses, feedSorts, submissionKind,
   type Category, type FeedSort, type SubmissionKind,
 } from "@/lib/config";
 import { getPublicFeed, getSiteCopy } from "@/lib/data";
+import { getCurrentUser } from "@/lib/auth";
 import { safePageNumber } from "@/lib/security";
 import { formatDate } from "@/lib/view";
 
@@ -36,9 +38,10 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
   const sort: FeedSort = feedSorts.includes(rawSort as FeedSort) && !(kind === "wish" && rawSort === "score") ? rawSort as FeedSort : "time";
   const hostRecommended = one(params.hostRecommended) === "1";
   const page = safePageNumber(one(params.page));
+  const user = await getCurrentUser();
   const [siteCopy, feed] = await Promise.all([
     getSiteCopy(),
-    getPublicFeed({ kind, category, status, q, sort, hostRecommended, page }),
+    getPublicFeed({ kind, category, status, q, sort, hostRecommended, page, currentUserId: user?.id }),
   ]);
   const pageCopy = kind === "work"
     ? { ...copy.work, title: `${siteCopy.recommendationHeroTitle}${siteCopy.recommendationHeroAccent}`, description: siteCopy.recommendationTagline, section: siteCopy.recommendationSectionTitle }
@@ -82,7 +85,7 @@ export async function PublicFeedPage({ kind, searchParams }: { kind: SubmissionK
             {item.externalUrl ? <a className="external-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer nofollow">查看相关链接 ↗</a> : null}
             {item.pinNote ? <div className="pin-note"><strong>{itemKind === "wish" ? "预定说明" : "神绮爱推荐语"}</strong><BvText>{item.pinNote}</BvText></div> : null}
             {item.reply ? <div className="host-reply"><div className="reply-title"><span className="avatar">爱</span><strong>{copy[itemKind].reply}</strong></div><p><BvText>{item.reply}</BvText></p><time>{formatDate(item.replyPublishedAt)}</time></div> : itemKind === "wish" ? <div className="waiting-reply">等待神绮爱回应</div> : null}
-            <footer><span>{item.source === "host" ? itemKind === "wish" ? "由神绮爱发布" : "由神绮爱撰写" : `由 ${item.submitter} ${itemKind === "wish" ? "许愿" : "推荐"}`}</span><span>记录于 {formatDate(item.createdAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span><Link className={`community-score-link ${item.communityScore < 0 ? "is-negative" : ""}`} href={`/submission/${item.id}`} aria-label={`查看详情，${itemKind === "wish" ? "净支持数" : "净推荐数"} ${item.communityScore}`}><ThumbsUp aria-hidden="true"/><b>{item.communityScore > 0 ? `+${item.communityScore}` : item.communityScore}</b></Link></footer>
+            <footer><span>{item.source === "host" ? itemKind === "wish" ? "由神绮爱发布" : "由神绮爱撰写" : `由 ${item.submitter} ${itemKind === "wish" ? "许愿" : "推荐"}`}</span><span>记录于 {formatDate(item.createdAt)}</span><span>公开于 {formatDate(item.publishedAt)}</span><QuickVoteControls key={`${item.id}:${item.recommendCount}:${item.notRecommendCount}:${item.currentUserRecommend}`} submissionId={item.id} recommendCount={item.recommendCount} notRecommendCount={item.notRecommendCount} currentUserRecommend={item.currentUserRecommend} isLoggedIn={!!user} positiveLabel={itemKind === "wish" ? "支持" : "喜欢"} negativeLabel={itemKind === "wish" ? "不支持" : "不喜欢"}/></footer>
           </article>;
         })}
       </div>

@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { cache } from "react";
 import { getDb } from "@/db";
-import { activityLogs, hostMusings, hostReplies, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { activityLogs, hostMusingLikes, hostMusings, hostReplies, marshmallowLikes, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, submissionKind, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
 import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmissionAuthor } from "./transitions";
@@ -68,9 +68,14 @@ export const getSiteCopy = cache(async function getSiteCopy() {
   }
 });
 
-export async function getPublicFeed(filters: { kind?: SubmissionKind; category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number } = {}) {
+export async function getPublicFeed(filters: { kind?: SubmissionKind; category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number; currentUserId?: string } = {}) {
   try {
-    const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} then 1 else -1 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
+    const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
+    const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = true)`;
+    const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
+    const currentUserRecommend = filters.currentUserId
+      ? sql<boolean | null>`(select ${submissionReviews.recommend} from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.userId} = ${filters.currentUserId} limit 1)`
+      : sql<boolean | null>`null`;
     const conditions = [isNotNull(submissions.publishedAt), isNull(submissions.deletedAt)];
     if (filters.kind === "work") conditions.push(notInArray(submissions.category, ["food", "wish"]));
     if (filters.kind === "food") conditions.push(eq(submissions.category, "food"));
@@ -89,7 +94,7 @@ export async function getPublicFeed(filters: { kind?: SubmissionKind; category?:
       createdAt: submissions.createdAt, publishedAt: submissions.publishedAt, feedActivityAt: submissions.feedActivityAt,
       contentStatus: submissions.contentStatus, pinnedAt: submissions.pinnedAt, pinNote: submissions.pinNote,
       source: submissions.source, score: submissions.score,
-      communityScore,
+      communityScore, recommendCount, notRecommendCount, currentUserRecommend,
       reply: hostReplies.content, replyPublishedAt: hostReplies.publishedAt,
     }).from(submissions).innerJoin(users, eq(submissions.userId, users.id)).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
       .where(and(...conditions))
@@ -112,7 +117,7 @@ export async function createSubmission(userId: string, data: { category: Categor
 }
 
 export async function getPublicSubmissionDetail(submissionId: string, currentUserId?: string, requestedReviewPage = 1) {
-  const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} then 1 else -1 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
+  const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
   const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = true)`;
   const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
   const commentCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.comment} is not null)`;
@@ -141,22 +146,69 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
   return { item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) }, isAuthor: currentUserId === userId, reviews: reviews.slice(0, 50), reviewPage, reviewHasMore: reviews.length > 50, ownReview: own[0] ?? null };
 }
 
-export async function saveSubmissionReview(userId: string, data: { submissionId: string; recommend: boolean; comment: string | null }) {
+async function assertPublishedSubmission(tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0], submissionId: string) {
+  const [submission] = await tx.select({ id: submissions.id }).from(submissions)
+    .where(and(eq(submissions.id, submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
+  if (!submission) throw new Error("这条内容不存在或尚未公开");
+}
+
+export async function setSubmissionVote(userId: string, submissionId: string, recommend: boolean | null) {
   return getDb().transaction(async (tx) => {
-    const [submission] = await tx.select({ id: submissions.id }).from(submissions)
-      .where(and(eq(submissions.id, data.submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
-    if (!submission) throw new Error("这条内容不存在或尚未公开");
+    await assertPublishedSubmission(tx, submissionId);
+    const [existing] = await tx.select({ comment: submissionReviews.comment, recommend: submissionReviews.recommend }).from(submissionReviews)
+      .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).limit(1);
     const now = new Date();
-    await tx.insert(submissionReviews).values({ userId, submissionId: data.submissionId, recommend: data.recommend, comment: data.comment, createdAt: now, updatedAt: now })
-      .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { recommend: data.recommend, comment: data.comment, updatedAt: now } });
-    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId: data.submissionId, action: "submission_review_saved", metadata: { recommend: data.recommend, hasComment: !!data.comment } });
+    if (recommend === null && !existing?.comment) {
+      if (existing) await tx.delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
+    } else {
+      await tx.insert(submissionReviews).values({ userId, submissionId, recommend, comment: existing?.comment ?? null, createdAt: now, updatedAt: now })
+        .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { recommend, updatedAt: now } });
+    }
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_vote_updated", metadata: { recommend } });
   });
 }
 
-export async function deleteSubmissionReview(userId: string, submissionId: string) {
-  const rows = await getDb().delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).returning({ id: submissionReviews.id });
-  if (!rows.length) throw new Error("没有可以撤回的评价");
-  await getDb().insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_review_deleted" });
+export async function toggleSubmissionLike(userId: string, submissionId: string) {
+  return getDb().transaction(async (tx) => {
+    await assertPublishedSubmission(tx, submissionId);
+    const [existing] = await tx.select({ comment: submissionReviews.comment, recommend: submissionReviews.recommend }).from(submissionReviews)
+      .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).limit(1);
+    const liked = existing?.recommend !== true;
+    const now = new Date();
+    if (!liked && !existing?.comment) {
+      await tx.delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
+    } else {
+      await tx.insert(submissionReviews).values({ userId, submissionId, recommend: liked ? true : null, comment: existing?.comment ?? null, createdAt: now, updatedAt: now })
+        .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { recommend: liked ? true : null, updatedAt: now } });
+    }
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: liked ? "submission_liked" : "submission_unliked" });
+    return liked;
+  });
+}
+
+export async function saveSubmissionComment(userId: string, submissionId: string, comment: string) {
+  return getDb().transaction(async (tx) => {
+    await assertPublishedSubmission(tx, submissionId);
+    const now = new Date();
+    await tx.insert(submissionReviews).values({ userId, submissionId, recommend: null, comment, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({ target: [submissionReviews.submissionId, submissionReviews.userId], set: { comment, updatedAt: now } });
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_comment_saved" });
+  });
+}
+
+export async function deleteSubmissionComment(userId: string, submissionId: string) {
+  await getDb().transaction(async (tx) => {
+    const [existing] = await tx.select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment }).from(submissionReviews)
+      .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).limit(1);
+    if (!existing?.comment) throw new Error("没有可以删除的评论");
+    if (existing.recommend === null) {
+      await tx.delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
+    } else {
+      await tx.update(submissionReviews).set({ comment: null, updatedAt: new Date() })
+        .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
+    }
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_comment_deleted" });
+  });
 }
 
 export async function createMarshmallow(userId: string, data: { content: string; allowPublic: boolean }) {
@@ -196,24 +248,34 @@ export async function deleteOwnUnreadMarshmallow(userId: string, marshmallowId: 
   });
 }
 
-export async function getPublicMarshmallows(page = 1) {
+export async function getPublicMarshmallows(page = 1, currentUserId?: string) {
   const safePage = safePageNumber(page);
+  const likeCount = sql<number>`(select count(*)::int from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${marshmallows.id})`;
+  const likedByCurrentUser = currentUserId
+    ? sql<boolean>`exists(select 1 from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${marshmallows.id} and ${marshmallowLikes.userId} = ${currentUserId})`
+    : sql<boolean>`false`;
   const rows = await getDb().select({
-    id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt,
+    id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt, likeCount, likedByCurrentUser,
   }).from(marshmallows).where(and(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt)))
     .orderBy(desc(marshmallows.publishedAt), desc(marshmallows.id)).limit(51).offset((safePage - 1) * 50);
   return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
 }
 
-export async function getPublicHostMusings(page = 1) {
+export async function getPublicHostMusings(page = 1, currentUserId?: string) {
   const safePage = safePageNumber(page);
   try {
+    const likeCount = sql<number>`(select count(*)::int from ${hostMusingLikes} where ${hostMusingLikes.hostMusingId} = ${hostMusings.id})`;
+    const likedByCurrentUser = currentUserId
+      ? sql<boolean>`exists(select 1 from ${hostMusingLikes} where ${hostMusingLikes.hostMusingId} = ${hostMusings.id} and ${hostMusingLikes.userId} = ${currentUserId})`
+      : sql<boolean>`false`;
     const rows = await getDb().select({
       id: hostMusings.id,
       content: hostMusings.content,
       pinnedAt: hostMusings.pinnedAt,
       createdAt: hostMusings.createdAt,
       updatedAt: hostMusings.updatedAt,
+      likeCount,
+      likedByCurrentUser,
     }).from(hostMusings)
       .orderBy(
         desc(sql`${hostMusings.pinnedAt} is not null`),
@@ -227,6 +289,33 @@ export async function getPublicHostMusings(page = 1) {
     if (String(error).includes("DATABASE_URL_MISSING") || String(error).includes("host_musings")) return { items: [], hasMore: false };
     throw error;
   }
+}
+
+export async function toggleMarshmallowLike(userId: string, marshmallowId: string) {
+  return getDb().transaction(async (tx) => {
+    const [item] = await tx.select({ id: marshmallows.id }).from(marshmallows)
+      .where(and(eq(marshmallows.id, marshmallowId), isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt))).limit(1);
+    if (!item) throw new Error("这颗棉花糖不存在或尚未公开");
+    const [existing] = await tx.select({ id: marshmallowLikes.id }).from(marshmallowLikes)
+      .where(and(eq(marshmallowLikes.marshmallowId, marshmallowId), eq(marshmallowLikes.userId, userId))).limit(1);
+    if (existing) await tx.delete(marshmallowLikes).where(eq(marshmallowLikes.id, existing.id));
+    else await tx.insert(marshmallowLikes).values({ marshmallowId, userId });
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: existing ? "marshmallow_unliked" : "marshmallow_liked", metadata: { marshmallowId } });
+    return !existing;
+  });
+}
+
+export async function toggleHostMusingLike(userId: string, hostMusingId: string) {
+  return getDb().transaction(async (tx) => {
+    const [item] = await tx.select({ id: hostMusings.id }).from(hostMusings).where(eq(hostMusings.id, hostMusingId)).limit(1);
+    if (!item) throw new Error("这条碎碎念不存在");
+    const [existing] = await tx.select({ id: hostMusingLikes.id }).from(hostMusingLikes)
+      .where(and(eq(hostMusingLikes.hostMusingId, hostMusingId), eq(hostMusingLikes.userId, userId))).limit(1);
+    if (existing) await tx.delete(hostMusingLikes).where(eq(hostMusingLikes.id, existing.id));
+    else await tx.insert(hostMusingLikes).values({ hostMusingId, userId });
+    await tx.insert(activityLogs).values({ actorUserId: userId, action: existing ? "host_musing_unliked" : "host_musing_liked", metadata: { hostMusingId } });
+    return !existing;
+  });
 }
 
 export async function getHostMusings() {

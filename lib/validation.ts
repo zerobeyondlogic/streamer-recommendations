@@ -50,6 +50,21 @@ export const submissionReviewSchema = z.object({
   comment: text(2000).refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||").optional().transform((value) => value || null),
 });
 
+export const submissionVoteSchema = z.object({
+  submissionId: z.uuid(),
+  recommend: z.enum(["recommend", "not_recommend", "clear"]),
+});
+
+export const submissionCommentSchema = z.object({
+  submissionId: z.uuid(),
+  comment: text(2000).min(1, "请写下评论").refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||"),
+});
+
+export const quickLikeSchema = z.object({
+  targetType: z.enum(["submission", "marshmallow", "musing"]),
+  targetId: z.uuid(),
+});
+
 export const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "请使用 6 位十六进制颜色");
 export const themeSchema = z.object({
   backgroundType: z.enum(["built_in", "custom"]),

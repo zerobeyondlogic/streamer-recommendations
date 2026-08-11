@@ -9,12 +9,12 @@ import { getDb } from "@/db";
 import { siteCopySettings, siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, requireVerificationUser, resetUserPassword, updateAccountPassword, updateAccountUsername, updatePendingBilibiliUid } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionReview, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionReview, setHostMusingPinned, setManagedUserStatus, setPinned, softDelete, softDeleteMarshmallow, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
+  approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionComment, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionComment, setHostMusingPinned, setManagedUserStatus, setPinned, setSubmissionVote, softDelete, softDeleteMarshmallow, toggleHostMusingLike, toggleMarshmallowLike, toggleSubmissionLike, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin, safeLocalPath } from "@/lib/security";
-import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, scoreSchema, siteCopySchema, submissionReviewSchema, submissionSchema, themeSchema } from "@/lib/validation";
+import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, quickLikeSchema, scoreSchema, siteCopySchema, submissionCommentSchema, submissionSchema, submissionVoteSchema, themeSchema } from "@/lib/validation";
 import { categories, contentStatuses, submissionKind } from "@/lib/config";
 import { themePresets } from "@/lib/themes";
 import { isBlobStorageConfigured } from "@/lib/blob";
@@ -34,6 +34,12 @@ async function assertSameOrigin() {
 async function clientKey(scope: string) {
   const h = await headers();
   return `${scope}:${h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local"}`;
+}
+
+function consumeReactionLimit(userId: string) {
+  const burst = consumeRateLimit(`reaction:${userId}:minute`, 12, 60_000);
+  if (!burst.ok) return burst;
+  return consumeRateLimit(`reaction:${userId}:hour`, 60, 60 * 60_000);
 }
 
 export async function registerAction(form: FormData) {
@@ -208,29 +214,76 @@ export async function deleteOwnMarshmallowAction(form: FormData) {
   go("/me/submissions", "棉花糖已删除", "success");
 }
 
-export async function saveSubmissionReviewAction(form: FormData) {
+export async function setSubmissionVoteAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
-  const parsed = submissionReviewSchema.safeParse({ submissionId: value(form, "submissionId"), recommend: value(form, "recommend"), comment: value(form, "comment") });
+  const parsed = submissionVoteSchema.safeParse({ submissionId: value(form, "submissionId"), recommend: value(form, "recommend") });
   const fallbackId = z.uuid().safeParse(value(form, "submissionId"));
   const returnTo = fallbackId.success ? `/submission/${fallbackId.data}` : "/";
-  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "评价内容有误");
-  const limit = consumeRateLimit(`review:${user.id}`, 20, 60 * 60_000);
-  if (!limit.ok) go(returnTo, `评价操作有点快，请 ${limit.retryAfter} 秒后再试`);
-  try { await saveSubmissionReview(user.id, { submissionId: parsed.data.submissionId, recommend: parsed.data.recommend === "recommend", comment: parsed.data.comment }); }
-  catch (error) { go(returnTo, error instanceof Error ? error.message : "评价发布失败"); }
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "推荐选择无效");
+  const limit = consumeReactionLimit(user.id);
+  if (!limit.ok) go(returnTo, `操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  const vote = parsed.data.recommend === "clear" ? null : parsed.data.recommend === "recommend";
+  try { await setSubmissionVote(user.id, parsed.data.submissionId, vote); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "推荐状态保存失败"); }
   revalidatePublicCollections(); revalidatePath(returnTo);
-  go(`${returnTo}#comments`, "你的评价已保存", "success");
 }
 
-export async function deleteSubmissionReviewAction(form: FormData) {
+export async function setQuickSubmissionVoteAction(form: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const parsed = submissionVoteSchema.safeParse({ submissionId: value(form, "submissionId"), recommend: value(form, "recommend") });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "推荐选择无效" };
+  const limit = consumeReactionLimit(user.id);
+  if (!limit.ok) return { ok: false, error: `操作有点快，请 ${limit.retryAfter} 秒后再试` };
+  const vote = parsed.data.recommend === "clear" ? null : parsed.data.recommend === "recommend";
+  try { await setSubmissionVote(user.id, parsed.data.submissionId, vote); }
+  catch (error) { return { ok: false, error: error instanceof Error ? error.message : "推荐状态保存失败" }; }
+  revalidatePublicCollections(); revalidatePath(`/submission/${parsed.data.submissionId}`);
+  return { ok: true };
+}
+
+export async function saveSubmissionCommentAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const parsed = submissionCommentSchema.safeParse({ submissionId: value(form, "submissionId"), comment: value(form, "comment") });
+  const fallbackId = z.uuid().safeParse(value(form, "submissionId"));
+  const returnTo = fallbackId.success ? `/submission/${fallbackId.data}` : "/";
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "评论内容有误");
+  const limit = consumeRateLimit(`comment:${user.id}`, 20, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `评论操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  try { await saveSubmissionComment(user.id, parsed.data.submissionId, parsed.data.comment); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "评论发布失败"); }
+  revalidatePublicCollections(); revalidatePath(returnTo);
+  go(`${returnTo}#comments`, "你的评论已保存", "success");
+}
+
+export async function deleteSubmissionCommentAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const parsed = z.uuid().safeParse(value(form, "submissionId"));
   const returnTo = parsed.success ? `/submission/${parsed.data}` : "/";
   if (!parsed.success) go(returnTo, "内容编号无效");
-  try { await deleteSubmissionReview(user.id, parsed.data); }
-  catch (error) { go(returnTo, error instanceof Error ? error.message : "撤回失败"); }
+  try { await deleteSubmissionComment(user.id, parsed.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "删除失败"); }
   revalidatePublicCollections(); revalidatePath(returnTo);
-  go(`${returnTo}#comments`, "你的评价已撤回", "success");
+  go(`${returnTo}#comments`, "你的评论已删除", "success");
+}
+
+export async function toggleQuickLikeAction(form: FormData) {
+  await assertSameOrigin();
+  const user = await requireUser();
+  const parsed = quickLikeSchema.safeParse({ targetType: value(form, "targetType"), targetId: value(form, "targetId") });
+  if (!parsed.success) throw new Error("点赞目标无效");
+  const limit = consumeReactionLimit(user.id);
+  if (!limit.ok) throw new Error(`操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  if (parsed.data.targetType === "submission") {
+    await toggleSubmissionLike(user.id, parsed.data.targetId);
+    revalidatePublicCollections(); revalidatePath(`/submission/${parsed.data.targetId}`);
+  } else if (parsed.data.targetType === "marshmallow") {
+    await toggleMarshmallowLike(user.id, parsed.data.targetId);
+    revalidatePath("/marshmallow");
+  } else {
+    await toggleHostMusingLike(user.id, parsed.data.targetId);
+    revalidatePath("/musings");
+  }
 }
 
 function safeMarshmallowReturnPath(form: FormData, fallback = "/host/marshmallows") {

@@ -2,7 +2,7 @@ import { describe,expect,it } from "vitest";
 import { contentStatusLabel, submissionKind } from "../lib/config";
 import { isAllowedBackgroundUrl,isAllowedSiteFontUrl,isAllowedSiteIconUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
 import { clearRateLimitsForTests,consumeRateLimit } from "../lib/rate-limit";
-import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,hostMusingSchema,marshmallowSchema,siteCopySchema,submissionReviewSchema,submissionSchema,themeSchema } from "../lib/validation";
+import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,hostMusingSchema,marshmallowSchema,quickLikeSchema,siteCopySchema,submissionCommentSchema,submissionReviewSchema,submissionSchema,submissionVoteSchema,themeSchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
 import { themePresetIds,themePresets } from "../lib/themes";
 import { tokenizeBvText } from "../lib/bilibili";
@@ -51,6 +51,8 @@ describe("评分、B站绑定与 BV 链接",()=>{
 
 describe("社区评价与剧透",()=>{
   it("净推荐数等于推荐减去不推荐",()=>expect(recommendationScore([true,true,false,true,false])).toBe(1));
+  it("推荐投票和文字评论可以独立提交",()=>{const submissionId="00000000-0000-4000-8000-000000000000";expect(submissionVoteSchema.safeParse({submissionId,recommend:"recommend"}).success).toBe(true);expect(submissionVoteSchema.safeParse({submissionId,recommend:"clear"}).success).toBe(true);expect(submissionCommentSchema.safeParse({submissionId,comment:"只写评论也可以"}).success).toBe(true)});
+  it("快速点赞只接受五类公开内容对应的三种数据目标",()=>{const targetId="00000000-0000-4000-8000-000000000000";expect(quickLikeSchema.safeParse({targetType:"submission",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"marshmallow",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"musing",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"comment",targetId}).success).toBe(false)});
   it("把成对标记中的文字解析为剧透",()=>expect(parseSpoilerText("开头||结局剧透||结尾")).toEqual([{text:"开头",spoiler:false},{text:"结局剧透",spoiler:true},{text:"结尾",spoiler:false}]));
   it("拒绝没有闭合的剧透标记",()=>expect(submissionReviewSchema.safeParse({submissionId:"00000000-0000-4000-8000-000000000000",recommend:"recommend",comment:"这里有||未闭合剧透"}).success).toBe(false));
 });

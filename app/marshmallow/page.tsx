@@ -4,6 +4,7 @@ import { Cloud, LockKeyhole, Send } from "lucide-react";
 import { submitMarshmallowAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
 import { Notice } from "@/components/notice";
+import { QuickLikeButton } from "@/components/quick-like-button";
 import { getCurrentUser } from "@/lib/auth";
 import { getPublicMarshmallows, getSiteCopy } from "@/lib/data";
 import { safePageNumber } from "@/lib/security";
@@ -14,7 +15,8 @@ export const metadata: Metadata = { title: "Marshmallow 棉花糖", description:
 export default async function MarshmallowPage({ searchParams }: { searchParams: Promise<{ page?: string; error?: string; success?: string }> }) {
   const params = await searchParams;
   const page = safePageNumber(params.page);
-  const [user, feed, siteCopy] = await Promise.all([getCurrentUser(), getPublicMarshmallows(page), getSiteCopy()]);
+  const user = await getCurrentUser();
+  const [feed, siteCopy] = await Promise.all([getPublicMarshmallows(page, user?.id), getSiteCopy()]);
 
   return <div className="marshmallow-page page-shell">
     <header className="collection-hero marshmallow-hero">
@@ -36,7 +38,7 @@ export default async function MarshmallowPage({ searchParams }: { searchParams: 
       <div className="section-heading"><div><span className="eyebrow">公开墙</span><h2 id="marshmallow-wall-title">{siteCopy.marshmallowSectionTitle}</h2></div><span className="live-dot"><i/> 最新优先</span></div>
       <div className="marshmallow-wall-grid">
         {feed.items.map((item) => <article className="marshmallow-wall-card" key={item.id}>
-          <Cloud className="marshmallow-card-cloud" aria-hidden="true"/><BvText className="marshmallow-wall-copy">{item.content}</BvText><time>{formatDate(item.publishedAt)}</time>
+          <Cloud className="marshmallow-card-cloud" aria-hidden="true"/><BvText className="marshmallow-wall-copy">{item.content}</BvText><footer className="public-card-engagement"><time>{formatDate(item.publishedAt)}</time><QuickLikeButton targetType="marshmallow" targetId={item.id} count={item.likeCount} liked={item.likedByCurrentUser} isLoggedIn={!!user}/></footer>
         </article>)}
         {!feed.items.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有公开棉花糖</h3></div> : null}
       </div>

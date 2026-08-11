@@ -123,14 +123,35 @@ export const submissionReviews = pgTable("submission_reviews", {
   id: uuid("id").primaryKey().defaultRandom(),
   submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  recommend: boolean("recommend").notNull(),
+  recommend: boolean("recommend"),
   comment: text("comment"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
   uniqueIndex("submission_reviews_submission_user_uidx").on(table.submissionId, table.userId),
   index("submission_reviews_submission_updated_idx").on(table.submissionId, table.updatedAt),
+  check("submission_reviews_content_check", sql`${table.recommend} is not null or ${table.comment} is not null`),
   check("submission_reviews_comment_length_check", sql`${table.comment} is null or char_length(${table.comment}) between 1 and 2000`),
+]);
+
+export const marshmallowLikes = pgTable("marshmallow_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  marshmallowId: uuid("marshmallow_id").notNull().references(() => marshmallows.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+}, (table) => [
+  uniqueIndex("marshmallow_likes_marshmallow_user_uidx").on(table.marshmallowId, table.userId),
+  index("marshmallow_likes_marshmallow_created_idx").on(table.marshmallowId, table.createdAt),
+]);
+
+export const hostMusingLikes = pgTable("host_musing_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hostMusingId: uuid("host_musing_id").notNull().references(() => hostMusings.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+}, (table) => [
+  uniqueIndex("host_musing_likes_musing_user_uidx").on(table.hostMusingId, table.userId),
+  index("host_musing_likes_musing_created_idx").on(table.hostMusingId, table.createdAt),
 ]);
 
 export const hostReplies = pgTable("host_replies", {
@@ -230,5 +251,7 @@ export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
 export type HostMusing = typeof hostMusings.$inferSelect;
 export type SubmissionReview = typeof submissionReviews.$inferSelect;
+export type MarshmallowLike = typeof marshmallowLikes.$inferSelect;
+export type HostMusingLike = typeof hostMusingLikes.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
 export type SiteCopySetting = typeof siteCopySettings.$inferSelect;
