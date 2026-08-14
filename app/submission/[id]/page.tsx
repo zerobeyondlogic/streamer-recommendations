@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Cloud, MessageCircle, Pencil, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Cloud, MessageCircle, Pencil, Reply, ThumbsDown, ThumbsUp } from "lucide-react";
 import { z } from "zod";
-import { deleteSubmissionCommentAction } from "@/app/actions";
+import { deleteReviewReplyAction, deleteSubmissionCommentAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Notice } from "@/components/notice";
 import { ReviewEditor } from "@/components/review-editor";
+import { ReviewReplyEditor } from "@/components/review-reply-editor";
 import { SpoilerText } from "@/components/spoiler-text";
 import { getCurrentUser } from "@/lib/auth";
 import { categoryLabels, contentStatusLabel, submissionKind } from "@/lib/config";
@@ -16,11 +18,60 @@ import { formatDate } from "@/lib/view";
 
 export const metadata: Metadata = { title: "作品详情与评论" };
 
-export default async function PublicSubmissionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; success?: string; reviewPage?: string }> }) {
+type ReplyView = {
+  id: string;
+  reviewId: string;
+  userId: string;
+  replyToReplyId: string | null;
+  replyToUserId: string | null;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+  username: string;
+  replyToUsername: string | null;
+};
+
+function ReviewThread({ submissionId, reviewId, reviewPage, replies, currentUser, openReplyId }: {
+  submissionId: string;
+  reviewId: string;
+  reviewPage: number;
+  replies: ReplyView[];
+  currentUser: { id: string; username: string } | null;
+  openReplyId?: string;
+}) {
+  const shouldOpen = !!openReplyId && replies.some((reply) => reply.id === openReplyId);
+  return <div className="review-thread-zone">
+    {replies.length ? <details className="review-thread" open={shouldOpen}>
+      <summary><MessageCircle aria-hidden="true"/><span>{replies.length} 条回复</span><small>{shouldOpen ? "已展开" : "点击展开"}</small></summary>
+      <div className="review-thread-list">
+        {replies.map((reply) => <article className="review-thread-reply" id={`review-reply-${reply.id}`} key={reply.id}>
+          <header>
+            <strong>{reply.username}</strong>
+            {reply.replyToReplyId && reply.replyToUsername ? <span>回复 <b>@{reply.replyToUsername}</b></span> : null}
+            {currentUser?.id === reply.userId ? <small>我的回复</small> : null}
+          </header>
+          <SpoilerText className="review-thread-copy">{reply.content}</SpoilerText>
+          <footer>{reply.updatedAt.getTime() !== reply.createdAt.getTime() ? "更新于" : "回复于"} {formatDate(reply.updatedAt)}</footer>
+          {currentUser ? <div className="review-thread-actions">
+            <details className="review-reply-disclosure"><summary><Reply aria-hidden="true"/>回复</summary><ReviewReplyEditor submissionId={submissionId} reviewId={reviewId} reviewPage={reviewPage} replyToReplyId={reply.id} replyToUsername={reply.username}/></details>
+            {currentUser.id === reply.userId ? <>
+              <details className="review-reply-disclosure"><summary><Pencil aria-hidden="true"/>修改</summary><ReviewReplyEditor submissionId={submissionId} reviewId={reviewId} reviewPage={reviewPage} replyId={reply.id} initialContent={reply.content}/></details>
+              <form action={deleteReviewReplyAction}><input name="submissionId" type="hidden" value={submissionId}/><input name="replyId" type="hidden" value={reply.id}/><input name="reviewPage" type="hidden" value={reviewPage}/><ConfirmSubmit label="删除" title="删除这条回复？" description="删除后无法恢复；其他回复仍会保留在当前主楼。" confirmLabel="确认删除"/></form>
+            </> : null}
+          </div> : null}
+        </article>)}
+      </div>
+    </details> : null}
+    {currentUser ? <details className="review-root-reply"><summary><Reply aria-hidden="true"/>回复这条评价</summary><ReviewReplyEditor submissionId={submissionId} reviewId={reviewId} reviewPage={reviewPage}/></details> : null}
+  </div>;
+}
+
+export default async function PublicSubmissionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; success?: string; reviewPage?: string; openReply?: string }> }) {
   const [{ id: rawId }, messages, user] = await Promise.all([params, searchParams, getCurrentUser()]);
   const id = z.uuid().safeParse(rawId);
   if (!id.success) notFound();
   const requestedReviewPage = safePageNumber(messages.reviewPage);
+  const openReply = z.uuid().safeParse(messages.openReply);
   const detail = await getPublicSubmissionDetail(id.data, user?.id, requestedReviewPage);
   if (!detail) notFound();
   const { item, isAuthor, reviews, ownReview, reviewPage, reviewHasMore } = detail;
@@ -29,6 +80,7 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
   const backPath = kind === "food" ? "/food#feed" : kind === "wish" ? "/wishes#feed" : "/#feed";
   const positiveLabel = kind === "wish" ? "支持" : "推荐";
   const negativeLabel = kind === "wish" ? "暂不支持" : "不推荐";
+  const currentUser = user ? { id: user.id, username: user.username } : null;
 
   return <div className="submission-detail-page page-shell">
     <Link className="back-link" href={backPath}>← 返回{kind === "food" ? "美食家" : kind === "wish" ? "许愿箱" : "推荐单"}</Link>
@@ -54,22 +106,24 @@ export default async function PublicSubmissionPage({ params, searchParams }: { p
     </section> : null}
 
     <section className="community-comments" id="comments" aria-labelledby="community-comments-title">
-      <div className="section-heading"><div><span className="eyebrow">User reviews</span><h2 id="community-comments-title">{kind === "wish" ? "愿望留言" : "用户评论"}</h2></div><span className="comment-count"><MessageCircle aria-hidden="true"/>{item.commentCount} 条文字评论</span></div>
+      <div className="section-heading"><div><span className="eyebrow">User reviews</span><h2 id="community-comments-title">{kind === "wish" ? "愿望留言" : "用户评论"}</h2></div><span className="comment-count"><MessageCircle aria-hidden="true"/>{item.commentCount} 条评价{item.replyCount ? ` · ${item.replyCount} 条回复` : ""}</span></div>
       <div className="community-comment-list">
-        {ownReview?.comment && user ? <article className={`panel community-comment-card own-community-review ${ownReview.recommend === true ? "is-recommended" : ownReview.recommend === false ? "is-not-recommended" : "is-comment-only"}`}>
+        {ownReview?.comment && user ? <article className={`panel community-comment-card own-community-review ${ownReview.recommend === true ? "is-recommended" : ownReview.recommend === false ? "is-not-recommended" : "is-comment-only"}`} id={`review-${ownReview.id}`}>
           <header><span className="review-author review-author-own">{user.username}<small>我的评论</small></span><span className="review-verdict">{ownReview.recommend === true ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : ownReview.recommend === false ? <><ThumbsDown aria-hidden="true"/>{negativeLabel}</> : <><MessageCircle aria-hidden="true"/>仅评论</>}</span></header>
           <SpoilerText className="community-comment-copy">{ownReview.comment}</SpoilerText>
           <footer>更新于 {formatDate(ownReview.updatedAt)}</footer>
+          <ReviewThread submissionId={item.id} reviewId={ownReview.id} reviewPage={reviewPage} replies={ownReview.replies} currentUser={currentUser} openReplyId={openReply.success ? openReply.data : undefined}/>
           <div className="own-review-actions">
             <details className="own-review-edit"><summary><Pencil aria-hidden="true"/>修改</summary><ReviewEditor submissionId={item.id} kind={kind} initial={ownReview}/></details>
-            <form action={deleteSubmissionCommentAction}><input name="submissionId" type="hidden" value={item.id}/><button className="button small danger" type="submit"><X aria-hidden="true"/>删除评论</button></form>
+            <form action={deleteSubmissionCommentAction}><input name="submissionId" type="hidden" value={item.id}/><ConfirmSubmit label="删除评论" title="删除这条评论？" description="评论下的楼中楼回复也会一并删除，且无法恢复。" confirmLabel="确认删除"/></form>
           </div>
         </article> : null}
-        {reviews.map((review) => <article className={`panel community-comment-card ${review.recommend === true ? "is-recommended" : review.recommend === false ? "is-not-recommended" : "is-comment-only"}`} key={review.id}>
-        <header><span className="review-author">{review.username}</span><span className="review-verdict">{review.recommend === true ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : review.recommend === false ? <><ThumbsDown aria-hidden="true"/>{negativeLabel}</> : <><MessageCircle aria-hidden="true"/>仅评论</>}</span></header>
-        <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
-        <footer>评价于 {formatDate(review.updatedAt)}</footer>
-      </article>)}</div>
+        {reviews.map((review) => <article className={`panel community-comment-card ${review.recommend === true ? "is-recommended" : review.recommend === false ? "is-not-recommended" : "is-comment-only"}`} id={`review-${review.id}`} key={review.id}>
+          <header><span className="review-author">{review.username}</span><span className="review-verdict">{review.recommend === true ? <><ThumbsUp aria-hidden="true"/>{positiveLabel}</> : review.recommend === false ? <><ThumbsDown aria-hidden="true"/>{negativeLabel}</> : <><MessageCircle aria-hidden="true"/>仅评论</>}</span></header>
+          <SpoilerText className="community-comment-copy">{review.comment ?? ""}</SpoilerText>
+          <footer>评价于 {formatDate(review.updatedAt)}</footer>
+          <ReviewThread submissionId={item.id} reviewId={review.id} reviewPage={reviewPage} replies={review.replies} currentUser={currentUser} openReplyId={openReply.success ? openReply.data : undefined}/>
+        </article>)}</div>
       {!ownReview?.comment && !reviews.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有评论</h3></div> : null}
       {(reviewPage > 1 || reviewHasMore) ? <nav className="marshmallow-pagination" aria-label="评论分页">{reviewPage > 1 ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage - 1}#comments`}>← 上一页</Link> : <span/>}<strong>第 {reviewPage} 页</strong>{reviewHasMore ? <Link className="button ghost" href={`/submission/${item.id}?reviewPage=${reviewPage + 1}#comments`}>下一页 →</Link> : <span/>}</nav> : null}
     </section>

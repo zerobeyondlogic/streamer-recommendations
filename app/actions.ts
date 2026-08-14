@@ -9,12 +9,12 @@ import { getDb } from "@/db";
 import { siteCopySettings, siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, requireVerificationUser, resetUserPassword, updateAccountPassword, updateAccountUsername, updatePendingBilibiliUid } from "@/lib/auth";
 import {
-  approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteSubmissionComment, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
-  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionComment, setHostMusingPinned, setManagedUserStatus, setPinned, setSubmissionVote, softDelete, softDeleteMarshmallow, toggleHostMusingLike, toggleMarshmallowLike, toggleSubmissionLike, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateScore, updateSettings, updateSiteCopy,
+  approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createReviewReply, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteReviewReply, deleteSubmissionComment, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
+  getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionComment, setHostMusingPinned, setManagedUserStatus, setPinned, setSubmissionVote, softDelete, softDeleteMarshmallow, toggleMarshmallowLike, toggleSubmissionLike, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateReviewReply, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { isSameOrigin, safeLocalPath } from "@/lib/security";
-import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, quickLikeSchema, scoreSchema, siteCopySchema, submissionCommentSchema, submissionSchema, submissionVoteSchema, themeSchema } from "@/lib/validation";
+import { isSameOrigin, safeLocalPath, safePageNumber } from "@/lib/security";
+import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, createReviewReplySchema, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, quickLikeSchema, scoreSchema, siteCopySchema, submissionCommentSchema, submissionSchema, submissionVoteSchema, themeSchema, updateReviewReplySchema } from "@/lib/validation";
 import { categories, contentStatuses, submissionKind } from "@/lib/config";
 import { themePresets } from "@/lib/themes";
 import { isBlobStorageConfigured } from "@/lib/blob";
@@ -267,6 +267,60 @@ export async function deleteSubmissionCommentAction(form: FormData) {
   go(`${returnTo}#comments`, "你的评论已删除", "success");
 }
 
+function reviewDetailPath(submissionId: string, form: FormData) {
+  const page = safePageNumber(value(form, "reviewPage"));
+  return page > 1 ? `/submission/${submissionId}?reviewPage=${page}` : `/submission/${submissionId}`;
+}
+
+export async function createReviewReplyAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const parsed = createReviewReplySchema.safeParse({
+    submissionId: value(form, "submissionId"),
+    reviewId: value(form, "reviewId"),
+    replyToReplyId: value(form, "replyToReplyId"),
+    content: value(form, "content"),
+  });
+  const fallbackId = z.uuid().safeParse(value(form, "submissionId"));
+  const returnTo = fallbackId.success ? reviewDetailPath(fallbackId.data, form) : "/";
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "回复内容有误");
+  const limit = consumeRateLimit(`review-reply:${user.id}`, 30, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `回复操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  let replyId: string;
+  try { replyId = await createReviewReply(user.id, parsed.data.submissionId, parsed.data.reviewId, parsed.data.replyToReplyId, parsed.data.content); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "回复发布失败"); }
+  revalidatePath(`/submission/${parsed.data.submissionId}`); revalidatePath("/me/notifications");
+  const separator = returnTo.includes("?") ? "&" : "?";
+  go(`${returnTo}${separator}openReply=${replyId}#review-reply-${replyId}`, "回复已发布", "success");
+}
+
+export async function updateReviewReplyAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const parsed = updateReviewReplySchema.safeParse({ submissionId: value(form, "submissionId"), replyId: value(form, "replyId"), content: value(form, "content") });
+  const fallbackId = z.uuid().safeParse(value(form, "submissionId"));
+  const returnTo = fallbackId.success ? reviewDetailPath(fallbackId.data, form) : "/";
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "回复内容有误");
+  const limit = consumeRateLimit(`review-reply-edit:${user.id}`, 30, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `修改操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  try { await updateReviewReply(user.id, parsed.data.submissionId, parsed.data.replyId, parsed.data.content); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "回复修改失败"); }
+  revalidatePath(`/submission/${parsed.data.submissionId}`);
+  const separator = returnTo.includes("?") ? "&" : "?";
+  go(`${returnTo}${separator}openReply=${parsed.data.replyId}#review-reply-${parsed.data.replyId}`, "回复已更新", "success");
+}
+
+export async function deleteReviewReplyAction(form: FormData) {
+  await assertSameOrigin(); const user = await requireUser();
+  const submission = z.uuid().safeParse(value(form, "submissionId"));
+  const reply = z.uuid().safeParse(value(form, "replyId"));
+  const returnTo = submission.success ? reviewDetailPath(submission.data, form) : "/";
+  if (!submission.success || !reply.success) go(returnTo, "回复编号无效");
+  let reviewId: string;
+  try { reviewId = await deleteReviewReply(user.id, submission.data, reply.data); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "回复删除失败"); }
+  revalidatePath(`/submission/${submission.data}`); revalidatePath("/me/notifications");
+  go(`${returnTo}#review-${reviewId}`, "回复已删除", "success");
+}
+
 export async function toggleQuickLikeAction(form: FormData) {
   await assertSameOrigin();
   const user = await requireUser();
@@ -280,9 +334,6 @@ export async function toggleQuickLikeAction(form: FormData) {
   } else if (parsed.data.targetType === "marshmallow") {
     await toggleMarshmallowLike(user.id, parsed.data.targetId);
     revalidatePath("/marshmallow");
-  } else {
-    await toggleHostMusingLike(user.id, parsed.data.targetId);
-    revalidatePath("/musings");
   }
 }
 
@@ -406,8 +457,15 @@ export async function deleteOwnSubmissionAction(form: FormData) {
 
 export async function readNotificationAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
-  const id = value(form, "notificationId"); const submissionId = value(form, "submissionId");
-  await markNotificationRead(user.id, id); revalidatePath("/me/notifications"); redirect(submissionId ? `/?submission=${submissionId}` : "/me/notifications");
+  const id = z.uuid().safeParse(value(form, "notificationId"));
+  const submissionId = z.uuid().safeParse(value(form, "submissionId"));
+  const reviewReplyId = z.uuid().safeParse(value(form, "reviewReplyId"));
+  if (!id.success) go("/me/notifications", "消息编号无效");
+  await markNotificationRead(user.id, id.data); revalidatePath("/me/notifications");
+  if (!submissionId.success) redirect("/me/notifications");
+  redirect(reviewReplyId.success
+    ? `/submission/${submissionId.data}?openReply=${reviewReplyId.data}#review-reply-${reviewReplyId.data}`
+    : `/submission/${submissionId.data}#comments`);
 }
 export async function readAllNotificationsAction() { await assertSameOrigin(); const user = await requireUser(); await markAllNotificationsRead(user.id); revalidatePath("/me/notifications"); go("/me/notifications", "全部消息已标记为已读", "success"); }
 

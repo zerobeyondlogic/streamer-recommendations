@@ -2,11 +2,13 @@ import { describe,expect,it } from "vitest";
 import { contentStatusLabel, submissionKind } from "../lib/config";
 import { isAllowedBackgroundUrl,isAllowedSiteFontUrl,isAllowedSiteIconUrl,normalizeTitle,normalizeUsername,publicSubmitter,safeLocalPath,safePageNumber,safeSpreadsheetCell,sha256 } from "../lib/security";
 import { clearRateLimitsForTests,consumeRateLimit } from "../lib/rate-limit";
-import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,hostMusingSchema,marshmallowSchema,quickLikeSchema,siteCopySchema,submissionCommentSchema,submissionReviewSchema,submissionSchema,submissionVoteSchema,themeSchema } from "../lib/validation";
+import { accountPasswordSchema,accountUsernameSchema,appearanceSchema,colorSchema,createReviewReplySchema,hostMusingSchema,marshmallowSchema,quickLikeSchema,siteCopySchema,submissionCommentSchema,submissionReviewSchema,submissionSchema,submissionVoteSchema,themeSchema,updateReviewReplySchema } from "../lib/validation";
 import { hostRecommendationSchema, registrationSchema } from "../lib/validation";
 import { themePresetIds,themePresets } from "../lib/themes";
 import { tokenizeBvText } from "../lib/bilibili";
 import { parseSpoilerText,recommendationScore } from "../lib/spoilers";
+import { qualifiedColumn } from "../lib/sql";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 describe("账号与输入安全",()=>{
   it("用户名使用 NFKC 且不区分大小写",()=>expect(normalizeUsername("Ｔｅｓｔ用户")).toBe("test用户"));
@@ -52,7 +54,10 @@ describe("评分、B站绑定与 BV 链接",()=>{
 describe("社区评价与剧透",()=>{
   it("净推荐数等于推荐减去不推荐",()=>expect(recommendationScore([true,true,false,true,false])).toBe(1));
   it("推荐投票和文字评论可以独立提交",()=>{const submissionId="00000000-0000-4000-8000-000000000000";expect(submissionVoteSchema.safeParse({submissionId,recommend:"recommend"}).success).toBe(true);expect(submissionVoteSchema.safeParse({submissionId,recommend:"clear"}).success).toBe(true);expect(submissionCommentSchema.safeParse({submissionId,comment:"只写评论也可以"}).success).toBe(true)});
-  it("快速点赞只接受五类公开内容对应的三种数据目标",()=>{const targetId="00000000-0000-4000-8000-000000000000";expect(quickLikeSchema.safeParse({targetType:"submission",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"marshmallow",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"musing",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"comment",targetId}).success).toBe(false)});
+  it("快捷反馈只接受投稿和棉花糖",()=>{const targetId="00000000-0000-4000-8000-000000000000";expect(quickLikeSchema.safeParse({targetType:"submission",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"marshmallow",targetId}).success).toBe(true);expect(quickLikeSchema.safeParse({targetType:"musing",targetId}).success).toBe(false);expect(quickLikeSchema.safeParse({targetType:"comment",targetId}).success).toBe(false)});
+  it("相关子查询保留外层表限定",()=>{const query=new PgDialect().sqlToQuery(qualifiedColumn("marshmallows","id"));expect(query.sql).toBe('"marshmallows"."id"')});
   it("把成对标记中的文字解析为剧透",()=>expect(parseSpoilerText("开头||结局剧透||结尾")).toEqual([{text:"开头",spoiler:false},{text:"结局剧透",spoiler:true},{text:"结尾",spoiler:false}]));
   it("拒绝没有闭合的剧透标记",()=>expect(submissionReviewSchema.safeParse({submissionId:"00000000-0000-4000-8000-000000000000",recommend:"recommend",comment:"这里有||未闭合剧透"}).success).toBe(false));
+  it("楼中楼回复只接受同一层级所需的安全字段",()=>{const submissionId="00000000-0000-4000-8000-000000000000";const reviewId="10000000-0000-4000-8000-000000000000";expect(createReviewReplySchema.parse({submissionId,reviewId,replyToReplyId:"",content:" 回复 BV16v3t6GEpY "})).toEqual({submissionId,reviewId,replyToReplyId:null,content:"回复 BV16v3t6GEpY"});expect(updateReviewReplySchema.safeParse({submissionId,replyId:reviewId,content:"||未闭合"}).success).toBe(false)});
+  it("楼中楼回复限制为 1500 字",()=>{const submissionId="00000000-0000-4000-8000-000000000000";const reviewId="10000000-0000-4000-8000-000000000000";expect(createReviewReplySchema.safeParse({submissionId,reviewId,content:"回".repeat(1501)}).success).toBe(false)});
 });

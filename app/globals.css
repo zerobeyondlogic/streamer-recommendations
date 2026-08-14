@@ -178,6 +178,29 @@ html[data-color-mode="dark"] .mode-dark-only,html[data-color-mode="dark"] .theme
 .authored-content-editor{min-width:0}.authored-content-editor>summary{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-solid);color:var(--color-primary);font-size:.78rem;font-weight:900;cursor:pointer;list-style:none}.authored-content-editor>summary::-webkit-details-marker{display:none}.authored-content-editor>summary svg{width:16px;height:16px}.authored-content-editor[open]{width:100%;flex-basis:100%;margin-top:8px}.authored-content-editor[open]>summary{margin-bottom:12px;background:color-mix(in srgb,var(--color-primary) 8%,var(--surface-solid))}.authored-content-editor>form{padding:16px;border:1px solid var(--line);border-radius:15px;background:color-mix(in srgb,var(--surface-solid) 90%,transparent);text-align:left}.record-card:has(.authored-content-editor[open]){flex-wrap:wrap}.record-actions:has(.authored-content-editor[open]){flex:1 0 100%}.record-actions .authored-content-editor[open]{order:10}.host-authored-content{margin-bottom:16px}.host-authored-content>h2{margin:0}.host-authored-content>.helper{display:block;margin:5px 0 14px}.author-edit-link{margin-top:18px}.author-edit-link svg{width:16px;height:16px}
 @media(max-width:620px){.own-review-actions{align-items:stretch;flex-direction:column}.own-review-edit,.own-review-edit summary,.own-review-actions>form,.own-review-actions>form .button{width:100%}}
 
+/* One-level review threads. Replies stay visually grouped without infinite indentation. */
+.review-thread-zone{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
+.review-thread>summary,.review-root-reply>summary,.review-reply-disclosure>summary{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 10px;border:0;border-radius:10px;background:color-mix(in srgb,var(--color-primary) 8%,transparent);color:var(--color-primary);font-size:.73rem;font-weight:850;cursor:pointer;list-style:none}
+.review-thread>summary::-webkit-details-marker,.review-root-reply>summary::-webkit-details-marker,.review-reply-disclosure>summary::-webkit-details-marker{display:none}
+.review-thread>summary svg,.review-root-reply>summary svg,.review-reply-disclosure>summary svg{width:15px;height:15px}
+.review-thread>summary small{color:var(--muted);font-size:.65rem;font-weight:650}
+.review-thread[open]>summary{margin-bottom:11px;background:color-mix(in srgb,var(--color-primary) 13%,transparent)}
+.review-thread-list{display:grid;gap:8px}
+.review-thread-reply{scroll-margin-top:120px;padding:13px 14px;border-radius:14px;background:color-mix(in srgb,var(--surface-solid) 48%,transparent)}
+.review-thread-reply:target{outline:2px solid color-mix(in srgb,var(--color-primary) 62%,transparent);outline-offset:2px}
+.community-comment-card .review-thread-reply header{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:wrap}
+.review-thread-reply header strong{font-size:.78rem}.review-thread-reply header span{color:var(--muted);font-size:.7rem}.review-thread-reply header span b{color:var(--color-primary)}.review-thread-reply header small{margin-left:auto;color:var(--color-primary);font-size:.64rem;font-weight:850}
+.review-thread-copy{display:block;margin:9px 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;font-size:.86rem}
+.community-comment-card .review-thread-reply footer{padding:0;border:0;color:var(--muted);font-size:.65rem}
+.review-thread-actions{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;margin-top:9px}
+.review-thread-actions>form .button{min-height:34px;padding:6px 10px;font-size:.7rem}
+.review-reply-disclosure[open]{flex:1 0 100%}.review-reply-disclosure[open]>summary{margin-bottom:8px;background:color-mix(in srgb,var(--color-primary) 13%,transparent)}
+.review-root-reply{margin-top:9px}.review-root-reply[open]>summary{margin-bottom:9px;background:color-mix(in srgb,var(--color-primary) 13%,transparent)}
+.review-reply-editor{display:grid;gap:9px;padding:12px;border-radius:13px;background:color-mix(in srgb,var(--surface-solid) 58%,transparent)}
+.review-reply-editor label{display:grid;gap:7px;color:var(--muted);font-size:.72rem;font-weight:800}.review-reply-editor textarea{min-height:92px;max-height:240px;padding:12px;font-size:.84rem;line-height:1.65;resize:vertical}
+.review-reply-editor-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.review-reply-editor-actions>span{flex:1;color:var(--muted);font-size:.68rem}.review-reply-editor-actions svg{width:15px;height:15px}
+@media(max-width:620px){.review-thread-reply{padding:12px}.review-reply-editor-actions{align-items:stretch}.review-reply-editor-actions>span{flex-basis:100%;order:-1}.review-reply-editor-actions .button.primary{margin-left:auto}.review-thread>summary small{display:none}}
+
 /* Workbench hierarchy, account settings and complete theme system. */
 :root{--page-background:var(--color-background);--nav-surface:rgb(255 255 255/var(--nav-opacity));--hero-surface:rgb(255 255 255/var(--hero-opacity));--filter-surface:rgb(255 255 255/var(--filter-opacity));--surface:rgb(255 255 255/var(--card-opacity));--surface-solid:#fffdfa;--surface-muted:#f6f2ef}
 body{background:var(--page-background)}

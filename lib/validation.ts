@@ -60,8 +60,25 @@ export const submissionCommentSchema = z.object({
   comment: text(2000).min(1, "请写下评论").refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||"),
 });
 
+const reviewReplyContentSchema = text(1500)
+  .min(1, "请写下回复")
+  .refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||");
+
+export const createReviewReplySchema = z.object({
+  submissionId: z.uuid(),
+  reviewId: z.uuid(),
+  replyToReplyId: z.union([z.literal(""), z.uuid()]).optional().transform((value) => value || null),
+  content: reviewReplyContentSchema,
+});
+
+export const updateReviewReplySchema = z.object({
+  submissionId: z.uuid(),
+  replyId: z.uuid(),
+  content: reviewReplyContentSchema,
+});
+
 export const quickLikeSchema = z.object({
-  targetType: z.enum(["submission", "marshmallow", "musing"]),
+  targetType: z.enum(["submission", "marshmallow"]),
   targetId: z.uuid(),
 });
 

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  type AnyPgColumn,
   check,
   index,
   integer,
@@ -134,6 +135,21 @@ export const submissionReviews = pgTable("submission_reviews", {
   check("submission_reviews_comment_length_check", sql`${table.comment} is null or char_length(${table.comment}) between 1 and 2000`),
 ]);
 
+export const reviewReplies = pgTable("review_replies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  reviewId: uuid("review_id").notNull().references(() => submissionReviews.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  replyToReplyId: uuid("reply_to_reply_id").references((): AnyPgColumn => reviewReplies.id, { onDelete: "set null" }),
+  replyToUserId: uuid("reply_to_user_id").references(() => users.id, { onDelete: "set null" }),
+  content: text("content").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("review_replies_review_created_idx").on(table.reviewId, table.createdAt),
+  index("review_replies_user_created_idx").on(table.userId, table.createdAt),
+  check("review_replies_content_length_check", sql`char_length(${table.content}) between 1 and 1500`),
+]);
+
 export const marshmallowLikes = pgTable("marshmallow_likes", {
   id: uuid("id").primaryKey().defaultRandom(),
   marshmallowId: uuid("marshmallow_id").notNull().references(() => marshmallows.id, { onDelete: "cascade" }),
@@ -169,13 +185,15 @@ export const hostReplies = pgTable("host_replies", {
 export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["host_reply", "host_reply_updated", "submission_pinned"] }).notNull(),
+  actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  type: text("type", { enum: ["host_reply", "host_reply_updated", "submission_pinned", "review_reply"] }).notNull(),
   submissionId: uuid("submission_id").references(() => submissions.id, { onDelete: "cascade" }),
   replyId: uuid("reply_id").references(() => hostReplies.id, { onDelete: "cascade" }),
+  reviewReplyId: uuid("review_reply_id").references(() => reviewReplies.id, { onDelete: "cascade" }),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (table) => [
-  check("notifications_type_check", sql`${table.type} in ('host_reply','host_reply_updated','submission_pinned')`),
+  check("notifications_type_check", sql`${table.type} in ('host_reply','host_reply_updated','submission_pinned','review_reply')`),
   index("notifications_user_unread_idx").on(table.userId, table.createdAt).where(sql`${table.readAt} is null`),
 ]);
 
@@ -251,6 +269,7 @@ export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
 export type HostMusing = typeof hostMusings.$inferSelect;
 export type SubmissionReview = typeof submissionReviews.$inferSelect;
+export type ReviewReply = typeof reviewReplies.$inferSelect;
 export type MarshmallowLike = typeof marshmallowLikes.$inferSelect;
 export type HostMusingLike = typeof hostMusingLikes.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;

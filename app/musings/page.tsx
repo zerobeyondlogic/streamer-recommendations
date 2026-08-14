@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MessageCircleMore, Pin } from "lucide-react";
 import { BvText } from "@/components/bv-text";
-import { QuickLikeButton } from "@/components/quick-like-button";
-import { getCurrentUser } from "@/lib/auth";
 import { getPublicHostMusings, getSiteCopy } from "@/lib/data";
 import { safePageNumber } from "@/lib/security";
 import { formatDate } from "@/lib/view";
@@ -14,8 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function MusingsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const params = await searchParams;
   const page = safePageNumber(params.page);
-  const user = await getCurrentUser();
-  const [feed, siteCopy] = await Promise.all([getPublicHostMusings(page, user?.id), getSiteCopy()]);
+  const [feed, siteCopy] = await Promise.all([getPublicHostMusings(page), getSiteCopy()]);
 
   return <div className="page-shell musings-page">
     <header className="collection-hero musings-hero">
@@ -29,7 +26,7 @@ export default async function MusingsPage({ searchParams }: { searchParams: Prom
         {feed.items.map((item) => <article className={`panel musing-card${item.pinnedAt ? " is-pinned" : ""}`} key={item.id}>
           {item.pinnedAt ? <span className="musing-pinned"><Pin aria-hidden="true"/> 置顶</span> : null}
           <BvText className="musing-content">{item.content}</BvText>
-          <footer><span className="musing-card-meta"><time dateTime={new Date(item.createdAt).toISOString()}>{formatDate(item.createdAt)}</time>{item.updatedAt.getTime() !== item.createdAt.getTime() ? <span>已编辑</span> : null}</span><QuickLikeButton targetType="musing" targetId={item.id} count={item.likeCount} liked={item.likedByCurrentUser} isLoggedIn={!!user}/></footer>
+          <footer><span className="musing-card-meta"><time dateTime={new Date(item.createdAt).toISOString()}>{formatDate(item.createdAt)}</time>{item.updatedAt.getTime() !== item.createdAt.getTime() ? <span>已编辑</span> : null}</span></footer>
         </article>)}
         {!feed.items.length ? <div className="empty-state"><MessageCircleMore aria-hidden="true"/><h3>这里还很安静</h3><p>主播发布碎碎念后会显示在这里。</p></div> : null}
       </div>

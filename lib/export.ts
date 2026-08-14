@@ -1,17 +1,17 @@
 import { getDb } from "@/db";
-import { activityLogs, hostMusings, hostReplies, marshmallows, notifications, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { activityLogs, hostMusings, hostReplies, marshmallows, notifications, reviewReplies, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { isAllowedBackgroundUrl, isAllowedSiteFontUrl, safeSpreadsheetCell, sha256 } from "./security";
 import type { Cell, Sheet, SheetData } from "write-excel-file/node";
 
-export const SCHEMA_VERSION = "12";
+export const SCHEMA_VERSION = "13";
 const isoDate = () => new Date().toISOString().slice(0, 10);
 const json = (value: unknown) => Buffer.from(JSON.stringify(value, null, 2));
 
 export async function createXlsxExport() {
   const writeExcelFile = (await import("write-excel-file/node")).default;
   const db = getDb();
-  const [submissionRows, userRows, notificationRows, settingsRows, copyRows, marshmallowRows, reviewRows, hostMusingRows] = await Promise.all([
-    db.select().from(submissions), db.select().from(users), db.select().from(notifications), db.select().from(siteSettings), db.select().from(siteCopySettings), db.select().from(marshmallows), db.select().from(submissionReviews), db.select().from(hostMusings),
+  const [submissionRows, userRows, notificationRows, settingsRows, copyRows, marshmallowRows, reviewRows, reviewReplyRows, hostMusingRows] = await Promise.all([
+    db.select().from(submissions), db.select().from(users), db.select().from(notifications), db.select().from(siteSettings), db.select().from(siteCopySettings), db.select().from(marshmallows), db.select().from(submissionReviews), db.select().from(reviewReplies), db.select().from(hostMusings),
   ]);
   const replies = await db.select().from(hostReplies);
   const usernames = new Map(userRows.map((row) => [row.id, row.username]));
@@ -30,6 +30,7 @@ export async function createXlsxExport() {
   add("棉花糖", ["棉花糖 ID","投稿用户名","内容","允许公开","投稿时间","已读时间","公开时间","是否移除","移除时间"], marshmallowRows.map((m) => [m.id,usernames.get(m.userId),m.content,m.allowPublic,m.createdAt,m.readAt,m.publishedAt,!!m.deletedAt,m.deletedAt]));
   add("碎碎念", ["碎碎念 ID","主播用户名","内容","是否置顶","置顶时间","发布时间","更新时间"], hostMusingRows.map((m) => [m.id,usernames.get(m.hostUserId),m.content,!!m.pinnedAt,m.pinnedAt,m.createdAt,m.updatedAt]));
   add("用户评价", ["评价 ID","投稿 ID","用户名","推荐","评论","创建时间","更新时间"], reviewRows.map((r) => [r.id,r.submissionId,usernames.get(r.userId),r.recommend,r.comment,r.createdAt,r.updatedAt]));
+  add("评价回复", ["回复 ID","主评价 ID","用户名","回复目标用户名","内容","创建时间","更新时间"], reviewReplyRows.map((r) => [r.id,r.reviewId,usernames.get(r.userId),r.replyToUserId?usernames.get(r.replyToUserId):null,r.content,r.createdAt,r.updatedAt]));
   add("主题设置", ["网站名称","网站副标题","网页图标地址","自定义字体地址","背景类型","电脑背景地址","手机背景地址","主色","辅助色","强调色","页面背景色","菜单透明度","菜单毛玻璃","大卡片透明度","大卡片毛玻璃","搜索栏透明度","搜索栏毛玻璃","普通卡片透明度","普通卡片毛玻璃","背景悬浮文字雾气浓度","遮罩强度","更新时间"], settingsRows.map((s) => [s.siteName,s.siteTagline,s.siteIconUrl,s.customFontUrl,s.backgroundType,s.backgroundImageUrl,s.backgroundImageMobileUrl,s.primaryColor,s.secondaryColor,s.accentColor,s.backgroundColor,s.navOpacity,s.navBlur,s.heroOpacity,s.heroBlur,s.filterOpacity,s.filterBlur,s.cardOpacity,s.cardBlur,s.ambientTextMist,s.backgroundOverlay,s.updatedAt]));
   add("页面文案", ["推荐单主标题","推荐单强调标题","推荐单副标题","推荐单列表标题","美食家主标题","美食家副标题","美食家列表标题","许愿箱主标题","许愿箱副标题","许愿箱列表标题","棉花糖主标题","棉花糖副标题","棉花糖公开墙标题","碎碎念主标题","碎碎念副标题","碎碎念列表标题","更新时间"], copyRows.map((s) => [s.recommendationHeroTitle,s.recommendationHeroAccent,s.recommendationTagline,s.recommendationSectionTitle,s.foodHeroTitle,s.foodTagline,s.foodSectionTitle,s.wishHeroTitle,s.wishTagline,s.wishSectionTitle,s.marshmallowHeroTitle,s.marshmallowTagline,s.marshmallowSectionTitle,s.musingsHeroTitle,s.musingsTagline,s.musingsSectionTitle,s.updatedAt]));
   const bytes = await writeExcelFile(sheets).toBuffer();
@@ -39,13 +40,13 @@ export async function createXlsxExport() {
 export async function createFullBackup() {
   const JSZip = (await import("jszip")).default;
   const db = getDb();
-  const [userRows, submissionRows, replyRows, notificationRows, settingsRows, copyRows, logRows, marshmallowRows, reviewRows, hostMusingRows] = await Promise.all([
-    db.select().from(users), db.select().from(submissions), db.select().from(hostReplies), db.select().from(notifications), db.select().from(siteSettings), db.select().from(siteCopySettings), db.select().from(activityLogs), db.select().from(marshmallows), db.select().from(submissionReviews), db.select().from(hostMusings),
+  const [userRows, submissionRows, replyRows, notificationRows, settingsRows, copyRows, logRows, marshmallowRows, reviewRows, reviewReplyRows, hostMusingRows] = await Promise.all([
+    db.select().from(users), db.select().from(submissions), db.select().from(hostReplies), db.select().from(notifications), db.select().from(siteSettings), db.select().from(siteCopySettings), db.select().from(activityLogs), db.select().from(marshmallows), db.select().from(submissionReviews), db.select().from(reviewReplies), db.select().from(hostMusings),
   ]);
   const files = new Map<string, Buffer>();
-  files.set("manifest.json", json({ product: "streamer-recommendations", schemaVersion: SCHEMA_VERSION, createdAt: new Date().toISOString(), sensitive: true, counts: { users:userRows.length, submissions:submissionRows.length, marshmallows:marshmallowRows.length, hostMusings:hostMusingRows.length, submissionReviews:reviewRows.length, replies:replyRows.length, notifications:notificationRows.length, settings:settingsRows.length, siteCopy:copyRows.length, activityLogs:logRows.length } }));
+  files.set("manifest.json", json({ product: "streamer-recommendations", schemaVersion: SCHEMA_VERSION, createdAt: new Date().toISOString(), sensitive: true, counts: { users:userRows.length, submissions:submissionRows.length, marshmallows:marshmallowRows.length, hostMusings:hostMusingRows.length, submissionReviews:reviewRows.length, reviewReplies:reviewReplyRows.length, replies:replyRows.length, notifications:notificationRows.length, settings:settingsRows.length, siteCopy:copyRows.length, activityLogs:logRows.length } }));
   files.set("schema-version.txt", Buffer.from(`${SCHEMA_VERSION}\n`));
-  files.set("users.json", json(userRows)); files.set("submissions.json", json(submissionRows)); files.set("marshmallows.json", json(marshmallowRows)); files.set("host-musings.json", json(hostMusingRows)); files.set("submission-reviews.json", json(reviewRows)); files.set("host-replies.json", json(replyRows)); files.set("notifications.json", json(notificationRows)); files.set("site-settings.json", json(settingsRows)); files.set("site-copy-settings.json", json(copyRows)); files.set("activity-logs.json", json(logRows));
+  files.set("users.json", json(userRows)); files.set("submissions.json", json(submissionRows)); files.set("marshmallows.json", json(marshmallowRows)); files.set("host-musings.json", json(hostMusingRows)); files.set("submission-reviews.json", json(reviewRows)); files.set("review-replies.json", json(reviewReplyRows)); files.set("host-replies.json", json(replyRows)); files.set("notifications.json", json(notificationRows)); files.set("site-settings.json", json(settingsRows)); files.set("site-copy-settings.json", json(copyRows)); files.set("activity-logs.json", json(logRows));
   const customBackground = settingsRows[0]?.backgroundType === "custom" && isAllowedBackgroundUrl(settingsRows[0].backgroundImageUrl) ? settingsRows[0].backgroundImageUrl : null;
   const customMobileBackground = settingsRows[0]?.backgroundType === "custom" && isAllowedBackgroundUrl(settingsRows[0].backgroundImageMobileUrl) ? settingsRows[0].backgroundImageMobileUrl : null;
   const siteIcon = isAllowedBackgroundUrl(settingsRows[0]?.siteIconUrl) ? settingsRows[0].siteIconUrl : null;
@@ -62,11 +63,11 @@ export async function createFullBackup() {
 function extensionFromMime(mime:string|null){if(mime?.includes("png"))return ".png";if(mime?.includes("webp"))return ".webp";return ".jpg";}
 
 export async function validateBackup(bytes: Buffer) {
-  const JSZip = (await import("jszip")).default; const zip=await JSZip.loadAsync(bytes); const required=["manifest.json","schema-version.txt","users.json","submissions.json","marshmallows.json","host-musings.json","submission-reviews.json","host-replies.json","notifications.json","site-settings.json","site-copy-settings.json","activity-logs.json","checksums.sha256"];
+  const JSZip = (await import("jszip")).default; const zip=await JSZip.loadAsync(bytes); const required=["manifest.json","schema-version.txt","users.json","submissions.json","marshmallows.json","host-musings.json","submission-reviews.json","review-replies.json","host-replies.json","notifications.json","site-settings.json","site-copy-settings.json","activity-logs.json","checksums.sha256"];
   for(const name of required) if(!zip.file(name)) throw new Error(`备份缺少 ${name}`);
   const version=(await zip.file("schema-version.txt")!.async("text")).trim(); if(version!==SCHEMA_VERSION) throw new Error(`不支持的 schema 版本：${version}`);
   const checksumLines=(await zip.file("checksums.sha256")!.async("text")).trim().split(/\r?\n/);
   for(const line of checksumLines){const [expected,...rest]=line.split(/\s+/);const name=rest.join(" ");const file=zip.file(name);if(!file)throw new Error(`校验文件缺少 ${name}`);const actual=sha256(Buffer.from(await file.async("uint8array")));if(actual!==expected)throw new Error(`${name} 校验值不匹配`);}
   const read=<T>(name:string)=>zip.file(name)!.async("text").then(text=>JSON.parse(text) as T);
-  return { manifest:await read<Record<string,unknown>>("manifest.json"), users:await read<Record<string,unknown>[]>("users.json"), submissions:await read<Record<string,unknown>[]>("submissions.json"), marshmallows:await read<Record<string,unknown>[]>("marshmallows.json"), hostMusings:await read<Record<string,unknown>[]>("host-musings.json"), submissionReviews:await read<Record<string,unknown>[]>("submission-reviews.json"), replies:await read<Record<string,unknown>[]>("host-replies.json"), notifications:await read<Record<string,unknown>[]>("notifications.json"), settings:await read<Record<string,unknown>[]>("site-settings.json"), siteCopy:await read<Record<string,unknown>[]>("site-copy-settings.json"), logs:await read<Record<string,unknown>[]>("activity-logs.json") };
+  return { manifest:await read<Record<string,unknown>>("manifest.json"), users:await read<Record<string,unknown>[]>("users.json"), submissions:await read<Record<string,unknown>[]>("submissions.json"), marshmallows:await read<Record<string,unknown>[]>("marshmallows.json"), hostMusings:await read<Record<string,unknown>[]>("host-musings.json"), submissionReviews:await read<Record<string,unknown>[]>("submission-reviews.json"), reviewReplies:await read<Record<string,unknown>[]>("review-replies.json"), replies:await read<Record<string,unknown>[]>("host-replies.json"), notifications:await read<Record<string,unknown>[]>("notifications.json"), settings:await read<Record<string,unknown>[]>("site-settings.json"), siteCopy:await read<Record<string,unknown>[]>("site-copy-settings.json"), logs:await read<Record<string,unknown>[]>("activity-logs.json") };
 }

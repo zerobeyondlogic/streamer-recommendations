@@ -1,10 +1,11 @@
 import "server-only";
-import { and, asc, count, desc, eq, gt, ilike, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { cache } from "react";
 import { getDb } from "@/db";
-import { activityLogs, hostMusingLikes, hostMusings, hostReplies, marshmallowLikes, marshmallows, notifications, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
+import { activityLogs, hostMusings, hostReplies, marshmallowLikes, marshmallows, notifications, reviewReplies, sessions, siteCopySettings, siteSettings, submissionReviews, submissions, users } from "@/db/schema";
 import { MAX_PINNED_SUBMISSIONS, submissionKind, type Category, type ContentStatus, type FeedSort, type SubmissionKind } from "./config";
 import { normalizeTitle, publicSubmitter, safePageNumber } from "./security";
+import { qualifiedColumn } from "./sql";
 import { firstOpenPatch, marshmallowReadPatch, replyEffects, shouldNotifySubmissionAuthor } from "./transitions";
 
 export const defaultSettings = {
@@ -70,11 +71,12 @@ export const getSiteCopy = cache(async function getSiteCopy() {
 
 export async function getPublicFeed(filters: { kind?: SubmissionKind; category?: string; status?: string; q?: string; hostRecommended?: boolean; sort?: FeedSort; page?: number; currentUserId?: string } = {}) {
   try {
-    const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
-    const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = true)`;
-    const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
+    const outerSubmissionId = qualifiedColumn("submissions", "id");
+    const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId}), 0)::int`;
+    const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.recommend} = true)`;
+    const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.recommend} = false)`;
     const currentUserRecommend = filters.currentUserId
-      ? sql<boolean | null>`(select ${submissionReviews.recommend} from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.userId} = ${filters.currentUserId} limit 1)`
+      ? sql<boolean | null>`(select ${submissionReviews.recommend} from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.userId} = ${filters.currentUserId} limit 1)`
       : sql<boolean | null>`null`;
     const conditions = [isNotNull(submissions.publishedAt), isNull(submissions.deletedAt)];
     if (filters.kind === "work") conditions.push(notInArray(submissions.category, ["food", "wish"]));
@@ -84,7 +86,9 @@ export async function getPublicFeed(filters: { kind?: SubmissionKind; category?:
     if (filters.status) conditions.push(eq(submissions.contentStatus, filters.status as ContentStatus));
     if (filters.q) conditions.push(ilike(submissions.normalizedTitle, `%${normalizeTitle(filters.q)}%`));
     if (filters.hostRecommended) {
-      const hostRecommended = or(eq(submissions.source, "host"), isNotNull(submissions.pinnedAt));
+      // `users.role` keeps restored legacy host-authored rows visible even if
+      // an old backup still carries the pre-host-flow `source = 'user'` value.
+      const hostRecommended = or(eq(submissions.source, "host"), eq(users.role, "host"), isNotNull(submissions.pinnedAt));
       if (hostRecommended) conditions.push(hostRecommended);
     }
     const page = safePageNumber(filters.page);
@@ -117,16 +121,18 @@ export async function createSubmission(userId: string, data: { category: Categor
 }
 
 export async function getPublicSubmissionDetail(submissionId: string, currentUserId?: string, requestedReviewPage = 1) {
-  const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id}), 0)::int`;
-  const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = true)`;
-  const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.recommend} = false)`;
-  const commentCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${submissions.id} and ${submissionReviews.comment} is not null)`;
+  const outerSubmissionId = qualifiedColumn("submissions", "id");
+  const communityScore = sql<number>`coalesce((select sum(case when ${submissionReviews.recommend} = true then 1 when ${submissionReviews.recommend} = false then -1 else 0 end) from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId}), 0)::int`;
+  const recommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.recommend} = true)`;
+  const notRecommendCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.recommend} = false)`;
+  const commentCount = sql<number>`(select count(*)::int from ${submissionReviews} where ${submissionReviews.submissionId} = ${outerSubmissionId} and ${submissionReviews.comment} is not null)`;
+  const replyCount = sql<number>`(select count(*)::int from ${reviewReplies} inner join ${submissionReviews} on ${submissionReviews.id} = ${reviewReplies.reviewId} where ${submissionReviews.submissionId} = ${outerSubmissionId})`;
   const [item] = await getDb().select({
     id: submissions.id, userId: submissions.userId, category: submissions.category, title: submissions.title, description: submissions.description,
     externalUrl: submissions.externalUrl, anonymousPublic: submissions.anonymousPublic, username: users.username,
     createdAt: submissions.createdAt, publishedAt: submissions.publishedAt, feedActivityAt: submissions.feedActivityAt,
     contentStatus: submissions.contentStatus, pinnedAt: submissions.pinnedAt, pinNote: submissions.pinNote,
-    source: submissions.source, score: submissions.score, communityScore, recommendCount, notRecommendCount, commentCount,
+    source: submissions.source, score: submissions.score, communityScore, recommendCount, notRecommendCount, commentCount, replyCount,
     reply: hostReplies.content, replyPublishedAt: hostReplies.publishedAt,
   }).from(submissions).innerJoin(users, eq(submissions.userId, users.id)).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
     .where(and(eq(submissions.id, submissionId), isNotNull(submissions.publishedAt), isNull(submissions.deletedAt))).limit(1);
@@ -134,16 +140,50 @@ export async function getPublicSubmissionDetail(submissionId: string, currentUse
   const reviewPage = safePageNumber(requestedReviewPage);
   const reviewConditions = [eq(submissionReviews.submissionId, submissionId), isNotNull(submissionReviews.comment)];
   if (currentUserId) reviewConditions.push(ne(submissionReviews.userId, currentUserId));
-  const [reviews, own] = await Promise.all([
-    getDb().select({ id: submissionReviews.id, recommend: submissionReviews.recommend, comment: submissionReviews.comment, createdAt: submissionReviews.createdAt, updatedAt: submissionReviews.updatedAt, username: users.username })
+  const [reviewRows, ownRows] = await Promise.all([
+    getDb().select({ id: submissionReviews.id, userId: submissionReviews.userId, recommend: submissionReviews.recommend, comment: submissionReviews.comment, createdAt: submissionReviews.createdAt, updatedAt: submissionReviews.updatedAt, username: users.username })
       .from(submissionReviews).innerJoin(users, eq(submissionReviews.userId, users.id))
       .where(and(...reviewConditions))
       .orderBy(desc(submissionReviews.updatedAt)).limit(51).offset((reviewPage - 1) * 50),
-    currentUserId ? getDb().select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment, updatedAt: submissionReviews.updatedAt })
+    currentUserId ? getDb().select({ id: submissionReviews.id, userId: submissionReviews.userId, recommend: submissionReviews.recommend, comment: submissionReviews.comment, updatedAt: submissionReviews.updatedAt })
       .from(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, currentUserId))).limit(1) : Promise.resolve([]),
   ]);
+  const visibleReviews = reviewRows.slice(0, 50);
+  const ownReview = ownRows[0] ?? null;
+  const rootReviewIds = [
+    ...visibleReviews.map((review) => review.id),
+    ...(ownReview?.comment ? [ownReview.id] : []),
+  ];
+  const outerReplyToUserId = qualifiedColumn("review_replies", "reply_to_user_id");
+  const replyRows = rootReviewIds.length ? await getDb().select({
+    id: reviewReplies.id,
+    reviewId: reviewReplies.reviewId,
+    userId: reviewReplies.userId,
+    replyToReplyId: reviewReplies.replyToReplyId,
+    replyToUserId: reviewReplies.replyToUserId,
+    content: reviewReplies.content,
+    createdAt: reviewReplies.createdAt,
+    updatedAt: reviewReplies.updatedAt,
+    username: users.username,
+    replyToUsername: sql<string | null>`(select ${users.username} from ${users} where ${users.id} = ${outerReplyToUserId} limit 1)`,
+  }).from(reviewReplies).innerJoin(users, eq(reviewReplies.userId, users.id))
+    .where(inArray(reviewReplies.reviewId, rootReviewIds))
+    .orderBy(asc(reviewReplies.createdAt)).limit(5000) : [];
+  const repliesByReview = new Map<string, typeof replyRows>();
+  for (const reply of replyRows) {
+    const replies = repliesByReview.get(reply.reviewId) ?? [];
+    replies.push(reply);
+    repliesByReview.set(reply.reviewId, replies);
+  }
   const { anonymousPublic, username, userId, ...publicItem } = item;
-  return { item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) }, isAuthor: currentUserId === userId, reviews: reviews.slice(0, 50), reviewPage, reviewHasMore: reviews.length > 50, ownReview: own[0] ?? null };
+  return {
+    item: { ...publicItem, submitter: publicSubmitter(anonymousPublic, username) },
+    isAuthor: currentUserId === userId,
+    reviews: visibleReviews.map((review) => ({ ...review, replies: repliesByReview.get(review.id) ?? [] })),
+    reviewPage,
+    reviewHasMore: reviewRows.length > 50,
+    ownReview: ownReview ? { ...ownReview, replies: repliesByReview.get(ownReview.id) ?? [] } : null,
+  };
 }
 
 async function assertPublishedSubmission(tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0], submissionId: string) {
@@ -198,9 +238,10 @@ export async function saveSubmissionComment(userId: string, submissionId: string
 
 export async function deleteSubmissionComment(userId: string, submissionId: string) {
   await getDb().transaction(async (tx) => {
-    const [existing] = await tx.select({ recommend: submissionReviews.recommend, comment: submissionReviews.comment }).from(submissionReviews)
+    const [existing] = await tx.select({ id: submissionReviews.id, recommend: submissionReviews.recommend, comment: submissionReviews.comment }).from(submissionReviews)
       .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId))).limit(1);
     if (!existing?.comment) throw new Error("没有可以删除的评论");
+    await tx.delete(reviewReplies).where(eq(reviewReplies.reviewId, existing.id));
     if (existing.recommend === null) {
       await tx.delete(submissionReviews).where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
     } else {
@@ -208,6 +249,79 @@ export async function deleteSubmissionComment(userId: string, submissionId: stri
         .where(and(eq(submissionReviews.submissionId, submissionId), eq(submissionReviews.userId, userId)));
     }
     await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "submission_comment_deleted" });
+  });
+}
+
+export async function createReviewReply(userId: string, submissionId: string, reviewId: string, replyToReplyId: string | null, content: string) {
+  return getDb().transaction(async (tx) => {
+    await assertPublishedSubmission(tx, submissionId);
+    const [rootReview] = await tx.select({ userId: submissionReviews.userId, comment: submissionReviews.comment })
+      .from(submissionReviews)
+      .where(and(eq(submissionReviews.id, reviewId), eq(submissionReviews.submissionId, submissionId)))
+      .limit(1);
+    if (!rootReview?.comment) throw new Error("这条评价不存在或已经删除");
+
+    let replyToUserId = rootReview.userId;
+    if (replyToReplyId) {
+      const [targetReply] = await tx.select({ userId: reviewReplies.userId }).from(reviewReplies)
+        .where(and(eq(reviewReplies.id, replyToReplyId), eq(reviewReplies.reviewId, reviewId)))
+        .limit(1);
+      if (!targetReply) throw new Error("要回复的楼层不存在或已经删除");
+      replyToUserId = targetReply.userId;
+    }
+
+    const now = new Date();
+    const [reply] = await tx.insert(reviewReplies).values({
+      reviewId,
+      userId,
+      replyToReplyId,
+      replyToUserId,
+      content,
+      createdAt: now,
+      updatedAt: now,
+    }).returning({ id: reviewReplies.id });
+    if (!reply) throw new Error("回复发布失败");
+
+    if (replyToUserId !== userId) {
+      await tx.insert(notifications).values({
+        userId: replyToUserId,
+        actorUserId: userId,
+        type: "review_reply",
+        submissionId,
+        reviewReplyId: reply.id,
+      });
+    }
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "review_reply_created", metadata: { reviewId, replyId: reply.id, replyToReplyId } });
+    return reply.id;
+  });
+}
+
+export async function updateReviewReply(userId: string, submissionId: string, replyId: string, content: string) {
+  return getDb().transaction(async (tx) => {
+    const [reply] = await tx.select({ id: reviewReplies.id, userId: reviewReplies.userId })
+      .from(reviewReplies)
+      .innerJoin(submissionReviews, eq(reviewReplies.reviewId, submissionReviews.id))
+      .where(and(eq(reviewReplies.id, replyId), eq(submissionReviews.submissionId, submissionId)))
+      .limit(1);
+    if (!reply) throw new Error("这条回复不存在或已经删除");
+    if (reply.userId !== userId) throw new Error("只能修改自己的回复");
+    await tx.update(reviewReplies).set({ content, updatedAt: new Date() }).where(eq(reviewReplies.id, replyId));
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "review_reply_updated", metadata: { replyId } });
+  });
+}
+
+export async function deleteReviewReply(userId: string, submissionId: string, replyId: string) {
+  return getDb().transaction(async (tx) => {
+    const [reply] = await tx.select({ id: reviewReplies.id, userId: reviewReplies.userId, reviewId: reviewReplies.reviewId })
+      .from(reviewReplies)
+      .innerJoin(submissionReviews, eq(reviewReplies.reviewId, submissionReviews.id))
+      .where(and(eq(reviewReplies.id, replyId), eq(submissionReviews.submissionId, submissionId)))
+      .limit(1);
+    if (!reply) throw new Error("这条回复不存在或已经删除");
+    if (reply.userId !== userId) throw new Error("只能删除自己的回复");
+    await tx.delete(reviewReplies).where(eq(reviewReplies.id, replyId));
+    await tx.insert(activityLogs).values({ actorUserId: userId, submissionId, action: "review_reply_deleted", metadata: { replyId, reviewId: reply.reviewId } });
+    return reply.reviewId;
   });
 }
 
@@ -250,9 +364,10 @@ export async function deleteOwnUnreadMarshmallow(userId: string, marshmallowId: 
 
 export async function getPublicMarshmallows(page = 1, currentUserId?: string) {
   const safePage = safePageNumber(page);
-  const likeCount = sql<number>`(select count(*)::int from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${marshmallows.id})`;
+  const outerMarshmallowId = qualifiedColumn("marshmallows", "id");
+  const likeCount = sql<number>`(select count(*)::int from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${outerMarshmallowId})`;
   const likedByCurrentUser = currentUserId
-    ? sql<boolean>`exists(select 1 from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${marshmallows.id} and ${marshmallowLikes.userId} = ${currentUserId})`
+    ? sql<boolean>`exists(select 1 from ${marshmallowLikes} where ${marshmallowLikes.marshmallowId} = ${outerMarshmallowId} and ${marshmallowLikes.userId} = ${currentUserId})`
     : sql<boolean>`false`;
   const rows = await getDb().select({
     id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt, likeCount, likedByCurrentUser,
@@ -261,21 +376,15 @@ export async function getPublicMarshmallows(page = 1, currentUserId?: string) {
   return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
 }
 
-export async function getPublicHostMusings(page = 1, currentUserId?: string) {
+export async function getPublicHostMusings(page = 1) {
   const safePage = safePageNumber(page);
   try {
-    const likeCount = sql<number>`(select count(*)::int from ${hostMusingLikes} where ${hostMusingLikes.hostMusingId} = ${hostMusings.id})`;
-    const likedByCurrentUser = currentUserId
-      ? sql<boolean>`exists(select 1 from ${hostMusingLikes} where ${hostMusingLikes.hostMusingId} = ${hostMusings.id} and ${hostMusingLikes.userId} = ${currentUserId})`
-      : sql<boolean>`false`;
     const rows = await getDb().select({
       id: hostMusings.id,
       content: hostMusings.content,
       pinnedAt: hostMusings.pinnedAt,
       createdAt: hostMusings.createdAt,
       updatedAt: hostMusings.updatedAt,
-      likeCount,
-      likedByCurrentUser,
     }).from(hostMusings)
       .orderBy(
         desc(sql`${hostMusings.pinnedAt} is not null`),
@@ -301,19 +410,6 @@ export async function toggleMarshmallowLike(userId: string, marshmallowId: strin
     if (existing) await tx.delete(marshmallowLikes).where(eq(marshmallowLikes.id, existing.id));
     else await tx.insert(marshmallowLikes).values({ marshmallowId, userId });
     await tx.insert(activityLogs).values({ actorUserId: userId, action: existing ? "marshmallow_unliked" : "marshmallow_liked", metadata: { marshmallowId } });
-    return !existing;
-  });
-}
-
-export async function toggleHostMusingLike(userId: string, hostMusingId: string) {
-  return getDb().transaction(async (tx) => {
-    const [item] = await tx.select({ id: hostMusings.id }).from(hostMusings).where(eq(hostMusings.id, hostMusingId)).limit(1);
-    if (!item) throw new Error("这条碎碎念不存在");
-    const [existing] = await tx.select({ id: hostMusingLikes.id }).from(hostMusingLikes)
-      .where(and(eq(hostMusingLikes.hostMusingId, hostMusingId), eq(hostMusingLikes.userId, userId))).limit(1);
-    if (existing) await tx.delete(hostMusingLikes).where(eq(hostMusingLikes.id, existing.id));
-    else await tx.insert(hostMusingLikes).values({ hostMusingId, userId });
-    await tx.insert(activityLogs).values({ actorUserId: userId, action: existing ? "host_musing_unliked" : "host_musing_liked", metadata: { hostMusingId } });
     return !existing;
   });
 }
@@ -455,12 +551,13 @@ export async function createHostRecommendation(hostId: string, data: {
 }
 
 export async function getMySubmissions(userId: string) {
+  const outerSubmissionId = qualifiedColumn("submissions", "id");
   return getDb().select({
     id: submissions.id, title: submissions.title, category: submissions.category, description: submissions.description,
     externalUrl: submissions.externalUrl, source: submissions.source, createdAt: submissions.createdAt,
     hostReadAt: submissions.hostReadAt, publishedAt: submissions.publishedAt, anonymousPublic: submissions.anonymousPublic,
     contentStatus: submissions.contentStatus, score: submissions.score, reply: hostReplies.content,
-    unread: sql<boolean>`exists(select 1 from ${notifications} n where n.submission_id = ${submissions.id} and n.user_id = ${userId} and n.read_at is null)`,
+    unread: sql<boolean>`exists(select 1 from ${notifications} n where n.submission_id = ${outerSubmissionId} and n.user_id = ${userId} and n.read_at is null)`,
   }).from(submissions).leftJoin(hostReplies, eq(hostReplies.submissionId, submissions.id))
     .where(and(eq(submissions.userId, userId), isNull(submissions.deletedAt))).orderBy(desc(submissions.createdAt));
 }
@@ -499,7 +596,17 @@ export async function deleteOwnUnreadSubmission(userId: string, submissionId: st
 
 export async function getNotifications(userId: string, unreadOnly = false) {
   const condition = unreadOnly ? and(eq(notifications.userId, userId), isNull(notifications.readAt)) : eq(notifications.userId, userId);
-  return getDb().select({ id: notifications.id, type: notifications.type, submissionId: notifications.submissionId, readAt: notifications.readAt, createdAt: notifications.createdAt, title: submissions.title })
+  const outerActorUserId = qualifiedColumn("notifications", "actor_user_id");
+  return getDb().select({
+    id: notifications.id,
+    type: notifications.type,
+    submissionId: notifications.submissionId,
+    reviewReplyId: notifications.reviewReplyId,
+    readAt: notifications.readAt,
+    createdAt: notifications.createdAt,
+    title: submissions.title,
+    actorUsername: sql<string | null>`(select ${users.username} from ${users} where ${users.id} = ${outerActorUserId} limit 1)`,
+  })
     .from(notifications).leftJoin(submissions, eq(notifications.submissionId, submissions.id)).where(condition).orderBy(desc(notifications.createdAt));
 }
 

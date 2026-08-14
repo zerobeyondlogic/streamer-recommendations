@@ -5,7 +5,7 @@ import { useOptimistic } from "react";
 import { useFormStatus } from "react-dom";
 import { toggleQuickLikeAction } from "@/app/actions";
 
-type QuickLikeTarget = "submission" | "marshmallow" | "musing";
+type QuickLikeTarget = "submission" | "marshmallow";
 
 export function QuickLikeButton({
   targetType,
