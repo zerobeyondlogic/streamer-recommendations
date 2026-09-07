@@ -169,6 +169,13 @@
       "when": 1786748140227,
       "tag": "0023_review_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788778189422,
+      "tag": "0024_marshmallow_reply_lifecycle",
+      "breakpoints": true
     }
   ]
 }

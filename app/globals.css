@@ -963,3 +963,43 @@ html[data-color-mode="dark"] .quick-like-button.is-liked{background:#203b30;colo
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 html[data-color-mode="dark"] .quick-vote-button.is-positive.is-selected{background:#203b30;color:#9de0bd}
 html[data-color-mode="dark"] .quick-vote-button.is-negative.is-selected{background:#442928;color:#ffc1b8}
+
+/* Marshmallows: replies stay with the message; reading and publishing are separate. */
+.marshmallow-host-reply{position:relative;min-width:0;margin:0 0 20px;padding:16px 18px;border-radius:18px;background:color-mix(in srgb,var(--color-primary) 8%,var(--control-surface));color:var(--ink)}
+.marshmallow-host-reply-meta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;margin-bottom:10px}
+.marshmallow-host-reply-meta strong{display:inline-flex;align-items:center;gap:7px;font-size:.78rem;color:var(--color-primary)}
+.marshmallow-host-reply-meta svg{width:17px;height:17px;flex:0 0 auto}
+.marshmallow-host-reply-meta time{color:var(--muted);font-size:.7rem}
+.marshmallow-host-reply-copy{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
+.marshmallow-manager-card,.my-marshmallow-card{scroll-margin-top:150px}
+.my-marshmallow-card:target{outline:2px solid color-mix(in srgb,var(--color-primary) 60%,transparent);outline-offset:4px}
+.marshmallow-reply-editor{margin-top:12px}
+.marshmallow-reply-editor>summary{width:max-content;max-width:100%;min-height:40px;display:flex;align-items:center;gap:7px;padding:0 14px;border-radius:12px;background:var(--control-surface);color:var(--ink);font-size:.78rem;font-weight:850;cursor:pointer;list-style:none}
+.marshmallow-reply-editor>summary::-webkit-details-marker{display:none}
+.marshmallow-reply-editor>summary svg{width:16px;height:16px}
+.marshmallow-reply-editor>summary:hover,.marshmallow-reply-editor[open]>summary{background:color-mix(in srgb,var(--color-primary) 12%,var(--control-surface));color:var(--color-primary)}
+.marshmallow-reply-editor>summary:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px}
+.marshmallow-reply-editor form{margin-top:12px;padding:18px;border-radius:18px;background:var(--control-surface)}
+.marshmallow-reply-editor textarea{min-height:130px}
+.marshmallow-reply-editor form>.button{justify-self:start}
+.marshmallow-status-tabs a{border:0;background:var(--control-surface)}
+.marshmallow-status-tabs a:hover,.marshmallow-status-tabs a.is-active{background:color-mix(in srgb,var(--color-primary) 14%,var(--control-surface));color:var(--color-primary)}
+.marshmallow-capture-column{display:flex;flex-direction:column;min-width:0;gap:14px}
+.marshmallow-capture-column>.marshmallow-capture{flex:1;margin:0;background:var(--surface);border-color:var(--line)}
+.marshmallow-capture::before,.marshmallow-capture::after{content:none}
+.marshmallow-stage-completion{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px}
+.marshmallow-stage-completion svg{width:18px;height:18px}
+.marshmallow-candidate-card{background:var(--surface);border-color:var(--line)}
+.marshmallow-candidate-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px}
+.marshmallow-candidate-actions>.helper{flex-basis:100%;line-height:1.65}
+.marshmallow-candidate-actions .button svg{width:16px;height:16px}
+.marshmallow-stepper a,.marshmallow-stepper>span{border:0;background:var(--control-surface);color:var(--ink)}
+.marshmallow-stepper a:hover{background:color-mix(in srgb,var(--color-primary) 14%,var(--control-surface));color:var(--color-primary)}
+.marshmallow-stepper .is-disabled{background:var(--control-surface);color:var(--muted);opacity:.6}
+@media(max-width:620px){
+  .marshmallow-host-reply{padding:14px}
+  .marshmallow-reply-editor form{padding:14px}
+  .marshmallow-reply-editor form>.button{width:100%}
+  .marshmallow-stage-completion>form{flex:1;min-width:130px}
+  .marshmallow-stage-completion .button{width:100%;padding-inline:12px}
+}

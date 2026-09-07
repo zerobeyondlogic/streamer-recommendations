@@ -5,13 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { del, put } from "@vercel/blob";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { siteCopySettings, siteSettings } from "@/db/schema";
+import { notifications, siteCopySettings, siteSettings } from "@/db/schema";
 import { getCurrentUser, login, logout, register, replaceOneTimePassword, requireAuthenticatedUser, requireHost, requireUser, requireVerificationUser, resetUserPassword, updateAccountPassword, updateAccountUsername, updatePendingBilibiliUid } from "@/lib/auth";
 import {
   approveBilibiliUser, createHostMusing, createHostRecommendation, createMarshmallow, createReviewReply, createSubmission, deleteHostMusing, deleteManagedUser, deleteOwnUnreadMarshmallow, deleteOwnUnreadSubmission, deleteReviewReply, deleteSubmissionComment, markAllNotificationsRead, markMarshmallowRead, markNotificationRead, markReadAndPublish, rejectBilibiliUser,
   getSettings, restoreMarshmallow, restoreSubmission, saveHostReply, saveSubmissionComment, setHostMusingPinned, setManagedUserStatus, setPinned, setSubmissionVote, softDelete, softDeleteMarshmallow, toggleMarshmallowLike, toggleSubmissionLike, updateAppearanceSettings, updateAuthoredSubmission, updateContentStatus, updateHostMusing, updateOwnUnreadMarshmallow, updateReviewReply, updateScore, updateSettings, updateSiteCopy,
 } from "@/lib/data";
+import { publishMarshmallow, saveMarshmallowReply, unpublishMarshmallow } from "@/lib/data";
+import { marshmallowReplySchema } from "@/lib/validation";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { isSameOrigin, safeLocalPath, safePageNumber } from "@/lib/security";
 import { accountPasswordSchema, accountUsernameSchema, appearanceSchema, changePasswordSchema, contrastRatio, createReviewReplySchema, hostMusingSchema, hostRecommendationSchema, hostUpdateSchema, marshmallowSchema, quickLikeSchema, scoreSchema, siteCopySchema, submissionCommentSchema, submissionSchema, submissionVoteSchema, themeSchema, updateReviewReplySchema } from "@/lib/validation";
@@ -338,20 +341,61 @@ export async function toggleQuickLikeAction(form: FormData) {
 }
 
 function safeMarshmallowReturnPath(form: FormData, fallback = "/host/marshmallows") {
-  const candidate = value(form, "returnTo");
-  return candidate.startsWith("/host/marshmallows") && !candidate.startsWith("//") ? candidate : fallback;
+  const candidate = safeLocalPath(value(form, "returnTo"), fallback);
+  return /^\/host\/marshmallows(?:\/stage)?(?:[?#]|$)/.test(candidate) ? candidate : fallback;
+}
+
+function revalidateMarshmallows() {
+  for (const path of ["/marshmallow", "/host/marshmallows", "/host/marshmallows/stage", "/host", "/me/submissions", "/me/notifications"]) revalidatePath(path);
+}
+
+function marshmallowCompletionPath(form: FormData) {
+  const next = z.uuid().safeParse(value(form, "nextId"));
+  return safeMarshmallowReturnPath(form, next.success ? `/host/marshmallows/stage?id=${next.data}` : "/host/marshmallows/stage");
 }
 
 export async function readMarshmallowAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
-  if (!id) go("/host/marshmallows/stage", "棉花糖编号无效");
-  let result: Awaited<ReturnType<typeof markMarshmallowRead>>;
-  try { result = await markMarshmallowRead(host.id, id); }
-  catch (error) { go("/host/marshmallows/stage", error instanceof Error ? error.message : "处理失败"); }
-  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
-  const next = z.uuid().safeParse(value(form, "nextId"));
-  const target = next.success ? `/host/marshmallows/stage?id=${next.data}` : "/host/marshmallows/stage";
-  go(target, result.published ? "已公开上墙" : "已完成阅读，这颗棉花糖保持私密", "success");
+  const returnTo = marshmallowCompletionPath(form);
+  if (!id) go(returnTo, "棉花糖编号无效");
+  try { await markMarshmallowRead(host.id, id); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "处理失败"); }
+  revalidateMarshmallows();
+  go(returnTo, "已标记为已读", "success");
+}
+
+export async function publishMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  const returnTo = marshmallowCompletionPath(form);
+  if (!id) go(returnTo, "棉花糖编号无效");
+  try { await publishMarshmallow(host.id, id); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "上墙失败"); }
+  revalidateMarshmallows();
+  go(returnTo, "已公开上墙", "success");
+}
+
+export async function unpublishMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  const returnTo = safeMarshmallowReturnPath(form);
+  if (!id) go(returnTo, "棉花糖编号无效");
+  try { await unpublishMarshmallow(host.id, id); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "下架失败"); }
+  revalidateMarshmallows();
+  go(returnTo, "已下架，内容和回复已从公开墙隐藏", "success");
+}
+
+export async function replyMarshmallowAction(form: FormData) {
+  await assertSameOrigin(); const host = await requireHost(); const id = marshmallowId(form);
+  const returnTo = safeMarshmallowReturnPath(form);
+  if (!id) go(returnTo, "棉花糖编号无效");
+  const parsed = marshmallowReplySchema.safeParse({ content: value(form, "content") });
+  if (!parsed.success) go(returnTo, parsed.error.issues[0]?.message ?? "回复内容有误");
+  const limit = consumeRateLimit(`marshmallow-reply:${host.id}`, 60, 60 * 60_000);
+  if (!limit.ok) go(returnTo, `回复操作有点快，请 ${limit.retryAfter} 秒后再试`);
+  try { await saveMarshmallowReply(host.id, id, parsed.data.content); }
+  catch (error) { go(returnTo, error instanceof Error ? error.message : "回复失败"); }
+  revalidateMarshmallows();
+  go(returnTo, "回复已送达", "success");
 }
 
 export async function deleteMarshmallowAction(form: FormData) {
@@ -360,7 +404,7 @@ export async function deleteMarshmallowAction(form: FormData) {
   if (!id) go(returnTo, "棉花糖编号无效");
   try { await softDeleteMarshmallow(host.id, id); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "移除失败"); }
-  revalidatePath("/marshmallow"); revalidatePath("/host/marshmallows"); revalidatePath("/host");
+  revalidateMarshmallows();
   go(returnTo, "棉花糖已移除，可在“已移除”列表恢复", "success");
 }
 
@@ -370,8 +414,8 @@ export async function restoreMarshmallowAction(form: FormData) {
   if (!id) go(returnTo, "棉花糖编号无效");
   try { await restoreMarshmallow(host.id, id); }
   catch (error) { go(returnTo, error instanceof Error ? error.message : "恢复失败"); }
-  revalidatePath("/host/marshmallows"); revalidatePath("/host");
-  go(returnTo, "棉花糖已恢复", "success");
+  revalidateMarshmallows();
+  go(returnTo, "棉花糖已恢复，尚未公开", "success");
 }
 
 export async function createHostRecommendationAction(form: FormData) {
@@ -458,14 +502,16 @@ export async function deleteOwnSubmissionAction(form: FormData) {
 export async function readNotificationAction(form: FormData) {
   await assertSameOrigin(); const user = await requireUser();
   const id = z.uuid().safeParse(value(form, "notificationId"));
-  const submissionId = z.uuid().safeParse(value(form, "submissionId"));
-  const reviewReplyId = z.uuid().safeParse(value(form, "reviewReplyId"));
   if (!id.success) go("/me/notifications", "消息编号无效");
+  const [notification] = await getDb().select({ submissionId: notifications.submissionId, reviewReplyId: notifications.reviewReplyId, marshmallowId: notifications.marshmallowId })
+    .from(notifications).where(and(eq(notifications.id, id.data), eq(notifications.userId, user.id))).limit(1);
+  if (!notification) go("/me/notifications", "这条消息不存在");
   await markNotificationRead(user.id, id.data); revalidatePath("/me/notifications");
-  if (!submissionId.success) redirect("/me/notifications");
-  redirect(reviewReplyId.success
-    ? `/submission/${submissionId.data}?openReply=${reviewReplyId.data}#review-reply-${reviewReplyId.data}`
-    : `/submission/${submissionId.data}#comments`);
+  if (notification.marshmallowId) redirect(`/me/submissions?marshmallow=${notification.marshmallowId}#my-marshmallow-${notification.marshmallowId}`);
+  if (!notification.submissionId) redirect("/me/notifications");
+  redirect(notification.reviewReplyId
+    ? `/submission/${notification.submissionId}?openReply=${notification.reviewReplyId}#review-reply-${notification.reviewReplyId}`
+    : `/submission/${notification.submissionId}#comments`);
 }
 export async function readAllNotificationsAction() { await assertSameOrigin(); const user = await requireUser(); await markAllNotificationsRead(user.id); revalidatePath("/me/notifications"); go("/me/notifications", "全部消息已标记为已读", "success"); }
 

@@ -331,12 +331,22 @@ export async function createMarshmallow(userId: string, data: { content: string;
   return row;
 }
 
-export async function getMyMarshmallows(userId: string, page = 1) {
-  const safePage = safePageNumber(page);
+export async function getMyMarshmallows(userId: string, page = 1, targetId?: string) {
+  let safePage = safePageNumber(page);
+  if (targetId && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(targetId)) {
+    const [target] = await getDb().select({ createdAt: marshmallows.createdAt, id: marshmallows.id }).from(marshmallows)
+      .where(and(eq(marshmallows.id, targetId), eq(marshmallows.userId, userId))).limit(1);
+    if (target) {
+      const [before] = await getDb().select({ value: count() }).from(marshmallows).where(and(eq(marshmallows.userId, userId),
+        or(gt(marshmallows.createdAt, target.createdAt), and(eq(marshmallows.createdAt, target.createdAt), gt(marshmallows.id, target.id)))));
+      safePage = Math.floor(before.value / 50) + 1;
+    }
+  }
   const rows = await getDb().select({
     id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic,
     readAt: marshmallows.readAt, publishedAt: marshmallows.publishedAt, deletedAt: marshmallows.deletedAt,
     createdAt: marshmallows.createdAt, updatedAt: marshmallows.updatedAt,
+    replyContent: marshmallows.replyContent, repliedAt: marshmallows.repliedAt, replyUpdatedAt: marshmallows.replyUpdatedAt, unpublishedAt: marshmallows.unpublishedAt,
   }).from(marshmallows).where(eq(marshmallows.userId, userId))
     .orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(51).offset((safePage - 1) * 50);
   return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
@@ -371,7 +381,8 @@ export async function getPublicMarshmallows(page = 1, currentUserId?: string) {
     : sql<boolean>`false`;
   const rows = await getDb().select({
     id: marshmallows.id, content: marshmallows.content, publishedAt: marshmallows.publishedAt, likeCount, likedByCurrentUser,
-  }).from(marshmallows).where(and(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt)))
+    replyContent: marshmallows.replyContent, replyUpdatedAt: marshmallows.replyUpdatedAt,
+  }).from(marshmallows).where(and(eq(marshmallows.allowPublic, true), isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt)))
     .orderBy(desc(marshmallows.publishedAt), desc(marshmallows.id)).limit(51).offset((safePage - 1) * 50);
   return { items: rows.slice(0, 50), hasMore: rows.length > 50, page: safePage };
 }
@@ -403,7 +414,7 @@ export async function getPublicHostMusings(page = 1) {
 export async function toggleMarshmallowLike(userId: string, marshmallowId: string) {
   return getDb().transaction(async (tx) => {
     const [item] = await tx.select({ id: marshmallows.id }).from(marshmallows)
-      .where(and(eq(marshmallows.id, marshmallowId), isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt))).limit(1);
+      .where(and(eq(marshmallows.id, marshmallowId), eq(marshmallows.allowPublic, true), isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt))).limit(1);
     if (!item) throw new Error("这颗棉花糖不存在或尚未公开");
     const [existing] = await tx.select({ id: marshmallowLikes.id }).from(marshmallowLikes)
       .where(and(eq(marshmallowLikes.marshmallowId, marshmallowId), eq(marshmallowLikes.userId, userId))).limit(1);
@@ -461,20 +472,22 @@ export async function deleteHostMusing(hostId: string, hostMusingId: string) {
   await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "host_musing_deleted", metadata: { hostMusingId } });
 }
 
-export type MarshmallowHostStatus = "all" | "pending" | "read" | "published" | "private" | "deleted";
+export type MarshmallowHostStatus = "all" | "pending" | "read" | "published" | "private" | "unpublished" | "deleted";
 
 export async function getHostMarshmallows(status: MarshmallowHostStatus = "pending") {
   const conditions: SQL[] = [];
   if (status === "pending") conditions.push(isNull(marshmallows.readAt), isNull(marshmallows.deletedAt));
   else if (status === "read") conditions.push(isNotNull(marshmallows.readAt), isNull(marshmallows.deletedAt));
   else if (status === "published") conditions.push(isNotNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt));
-  else if (status === "private") conditions.push(isNotNull(marshmallows.readAt), isNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt));
+  else if (status === "private") conditions.push(isNotNull(marshmallows.readAt), isNull(marshmallows.publishedAt), isNull(marshmallows.unpublishedAt), isNull(marshmallows.deletedAt));
+  else if (status === "unpublished") conditions.push(isNotNull(marshmallows.unpublishedAt), isNull(marshmallows.publishedAt), isNull(marshmallows.deletedAt));
   else if (status === "deleted") conditions.push(isNotNull(marshmallows.deletedAt));
   else conditions.push(isNull(marshmallows.deletedAt));
   return getDb().select({
     id: marshmallows.id, content: marshmallows.content, allowPublic: marshmallows.allowPublic,
     readAt: marshmallows.readAt, publishedAt: marshmallows.publishedAt, deletedAt: marshmallows.deletedAt,
     createdAt: marshmallows.createdAt, username: users.username,
+    replyContent: marshmallows.replyContent, repliedAt: marshmallows.repliedAt, replyUpdatedAt: marshmallows.replyUpdatedAt, unpublishedAt: marshmallows.unpublishedAt,
   }).from(marshmallows).innerJoin(users, eq(marshmallows.userId, users.id))
     .where(and(...conditions)).orderBy(desc(marshmallows.createdAt), desc(marshmallows.id)).limit(500);
 }
@@ -498,32 +511,83 @@ export async function getMarshmallowStage(requestedId?: string) {
   return { current, previousId: previous?.id ?? null, nextId: next?.id ?? null, next: next ?? null };
 }
 
+type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+async function lockHostMarshmallow(tx: DatabaseTransaction, hostId: string, marshmallowId: string, includeDeleted = false) {
+  const [host] = await tx.select({ id: users.id }).from(users)
+    .where(and(eq(users.id, hostId), eq(users.role, "host"), eq(users.status, "active"))).limit(1);
+  if (!host) throw new Error("只有主播可以管理棉花糖");
+  // Serialize read, publish, reply and author edits so consent is checked on the current row.
+  const [item] = await tx.select().from(marshmallows).where(eq(marshmallows.id, marshmallowId)).limit(1).for("update");
+  if (!item || (!includeDeleted && item.deletedAt)) throw new Error("这颗棉花糖不存在或已经移除");
+  return item;
+}
+
 export async function markMarshmallowRead(hostId: string, marshmallowId: string) {
-  return getDb().transaction(async (tx) => {
-    const [current] = await tx.select({ allowPublic: marshmallows.allowPublic }).from(marshmallows)
-      .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt))).limit(1);
-    if (!current) throw new Error("这颗棉花糖不存在或已经处理");
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId);
+    if (current.readAt) return;
+    await tx.update(marshmallows).set({ ...marshmallowReadPatch(new Date()), readBy: hostId }).where(eq(marshmallows.id, marshmallowId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_read", metadata: { marshmallowId } });
+  });
+}
+
+export async function publishMarshmallow(hostId: string, marshmallowId: string) {
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId);
+    if (!current.allowPublic) throw new Error("投稿人未允许公开，这颗棉花糖只能私密阅读和回复");
+    if (current.publishedAt) return;
     const now = new Date();
-    await tx.update(marshmallows).set({ ...marshmallowReadPatch(current.allowPublic, now), readBy: hostId })
-      .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.readAt), isNull(marshmallows.deletedAt)));
-    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_read", metadata: { marshmallowId, published: current.allowPublic } });
-    return { published: current.allowPublic };
+    await tx.update(marshmallows).set({ readAt: current.readAt ?? now, readBy: current.readBy ?? hostId, publishedAt: now, unpublishedAt: null, updatedAt: now }).where(eq(marshmallows.id, marshmallowId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_published", metadata: { marshmallowId } });
+  });
+}
+
+export async function unpublishMarshmallow(hostId: string, marshmallowId: string) {
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId);
+    if (!current.publishedAt) return;
+    const now = new Date();
+    await tx.update(marshmallows).set({ publishedAt: null, unpublishedAt: now, updatedAt: now }).where(eq(marshmallows.id, marshmallowId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_unpublished", metadata: { marshmallowId } });
+  });
+}
+
+export async function saveMarshmallowReply(hostId: string, marshmallowId: string, content: string) {
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId);
+    if (current.replyContent === content) return;
+    const now = new Date();
+    await tx.update(marshmallows).set({ replyContent: content, repliedAt: current.repliedAt ?? now, replyUpdatedAt: now, repliedBy: hostId,
+      readAt: current.readAt ?? now, readBy: current.readBy ?? hostId, updatedAt: now }).where(eq(marshmallows.id, marshmallowId));
+    if (current.userId !== hostId) {
+      // Keep one reminder per marshmallow, including subsequent edits to its reply.
+      await tx.delete(notifications).where(and(eq(notifications.marshmallowId, marshmallowId), eq(notifications.type, "marshmallow_reply")));
+      await tx.insert(notifications).values({ userId: current.userId, actorUserId: hostId, type: "marshmallow_reply", marshmallowId });
+    }
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: current.replyContent ? "marshmallow_reply_updated" : "marshmallow_replied", metadata: { marshmallowId } });
   });
 }
 
 export async function softDeleteMarshmallow(hostId: string, marshmallowId: string) {
-  const now = new Date();
-  const rows = await getDb().update(marshmallows).set({ deletedAt: now, deletedBy: hostId, updatedAt: now })
-    .where(and(eq(marshmallows.id, marshmallowId), isNull(marshmallows.deletedAt))).returning({ id: marshmallows.id });
-  if (!rows.length) throw new Error("这颗棉花糖不存在或已经移除");
-  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_deleted", metadata: { marshmallowId } });
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId);
+    const now = new Date();
+    await tx.update(marshmallows).set({ deletedAt: now, deletedBy: hostId, publishedAt: null,
+      unpublishedAt: current.publishedAt ? now : current.unpublishedAt, updatedAt: now }).where(eq(marshmallows.id, marshmallowId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_deleted", metadata: { marshmallowId } });
+  });
 }
 
 export async function restoreMarshmallow(hostId: string, marshmallowId: string) {
-  const rows = await getDb().update(marshmallows).set({ deletedAt: null, deletedBy: null, updatedAt: new Date() })
-    .where(and(eq(marshmallows.id, marshmallowId), isNotNull(marshmallows.deletedAt))).returning({ id: marshmallows.id });
-  if (!rows.length) throw new Error("这颗棉花糖不存在或已经恢复");
-  await getDb().insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_restored", metadata: { marshmallowId } });
+  await getDb().transaction(async (tx) => {
+    const current = await lockHostMarshmallow(tx, hostId, marshmallowId, true);
+    if (!current.deletedAt) return;
+    const now = new Date();
+    await tx.update(marshmallows).set({ deletedAt: null, deletedBy: null, publishedAt: null,
+      unpublishedAt: current.publishedAt ? now : current.unpublishedAt, updatedAt: now }).where(eq(marshmallows.id, marshmallowId));
+    await tx.insert(activityLogs).values({ actorUserId: hostId, action: "marshmallow_restored", metadata: { marshmallowId } });
+  });
 }
 
 export async function createHostRecommendation(hostId: string, data: {
@@ -602,6 +666,7 @@ export async function getNotifications(userId: string, unreadOnly = false) {
     type: notifications.type,
     submissionId: notifications.submissionId,
     reviewReplyId: notifications.reviewReplyId,
+    marshmallowId: notifications.marshmallowId,
     readAt: notifications.readAt,
     createdAt: notifications.createdAt,
     title: submissions.title,

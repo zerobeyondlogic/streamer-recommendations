@@ -94,6 +94,11 @@ export const marshmallows = pgTable("marshmallows", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
   content: text("content").notNull(),
   allowPublic: boolean("allow_public").notNull().default(false),
+  replyContent: text("reply_content"),
+  repliedAt: timestamp("replied_at", { withTimezone: true }),
+  replyUpdatedAt: timestamp("reply_updated_at", { withTimezone: true }),
+  repliedBy: uuid("replied_by").references(() => users.id, { onDelete: "set null" }),
+  unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),
   readBy: uuid("read_by").references(() => users.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -103,6 +108,7 @@ export const marshmallows = pgTable("marshmallows", {
   updatedAt: updatedAt(),
 }, (table) => [
   check("marshmallows_content_length_check", sql`char_length(${table.content}) between 1 and 1000`),
+  check("marshmallows_reply_length_check", sql`${table.replyContent} is null or char_length(${table.replyContent}) between 1 and 2000`),
   index("marshmallows_public_feed_idx").on(table.publishedAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
   index("marshmallows_pending_idx").on(table.createdAt).where(sql`${table.readAt} is null and ${table.deletedAt} is null`),
   index("marshmallows_user_created_idx").on(table.userId, table.createdAt),
@@ -186,14 +192,15 @@ export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
-  type: text("type", { enum: ["host_reply", "host_reply_updated", "submission_pinned", "review_reply"] }).notNull(),
+  type: text("type", { enum: ["host_reply", "host_reply_updated", "submission_pinned", "review_reply", "marshmallow_reply"] }).notNull(),
+  marshmallowId: uuid("marshmallow_id").references(() => marshmallows.id, { onDelete: "cascade" }),
   submissionId: uuid("submission_id").references(() => submissions.id, { onDelete: "cascade" }),
   replyId: uuid("reply_id").references(() => hostReplies.id, { onDelete: "cascade" }),
   reviewReplyId: uuid("review_reply_id").references(() => reviewReplies.id, { onDelete: "cascade" }),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (table) => [
-  check("notifications_type_check", sql`${table.type} in ('host_reply','host_reply_updated','submission_pinned','review_reply')`),
+  check("notifications_type_check", sql`${table.type} in ('host_reply','host_reply_updated','submission_pinned','review_reply','marshmallow_reply')`),
   index("notifications_user_unread_idx").on(table.userId, table.createdAt).where(sql`${table.readAt} is null`),
 ]);
 

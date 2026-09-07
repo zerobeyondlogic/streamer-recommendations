@@ -50,6 +50,10 @@ export const submissionReviewSchema = z.object({
   comment: text(2000).refine(hasBalancedSpoilers, "剧透标记需要成对出现，请检查是否缺少一个 ||").optional().transform((value) => value || null),
 });
 
+export const marshmallowReplySchema = z.object({
+  content: text(2000).min(1, "请写下回复"),
+});
+
 export const submissionVoteSchema = z.object({
   submissionId: z.uuid(),
   recommend: z.enum(["recommend", "not_recommend", "clear"]),

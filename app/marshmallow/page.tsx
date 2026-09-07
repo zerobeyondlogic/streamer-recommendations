@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Cloud, LockKeyhole, Send } from "lucide-react";
 import { submitMarshmallowAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
+import { MarshmallowReply } from "@/components/marshmallow-reply";
 import { Notice } from "@/components/notice";
 import { QuickLikeButton } from "@/components/quick-like-button";
 import { getCurrentUser } from "@/lib/auth";
@@ -38,7 +39,7 @@ export default async function MarshmallowPage({ searchParams }: { searchParams: 
       <div className="section-heading"><div><span className="eyebrow">公开墙</span><h2 id="marshmallow-wall-title">{siteCopy.marshmallowSectionTitle}</h2></div><span className="live-dot"><i/> 最新优先</span></div>
       <div className="marshmallow-wall-grid">
         {feed.items.map((item) => <article className="marshmallow-wall-card" key={item.id}>
-          <Cloud className="marshmallow-card-cloud" aria-hidden="true"/><BvText className="marshmallow-wall-copy">{item.content}</BvText><footer className="public-card-engagement"><time>{formatDate(item.publishedAt)}</time><QuickLikeButton targetType="marshmallow" targetId={item.id} count={item.likeCount} liked={item.likedByCurrentUser} isLoggedIn={!!user}/></footer>
+          <Cloud className="marshmallow-card-cloud" aria-hidden="true"/><BvText className="marshmallow-wall-copy">{item.content}</BvText><MarshmallowReply content={item.replyContent} updatedAt={item.replyUpdatedAt}/><footer className="public-card-engagement"><time>{formatDate(item.publishedAt)}</time><QuickLikeButton targetType="marshmallow" targetId={item.id} count={item.likeCount} liked={item.likedByCurrentUser} isLoggedIn={!!user}/></footer>
         </article>)}
         {!feed.items.length ? <div className="empty-state"><Cloud aria-hidden="true"/><h3>还没有公开棉花糖</h3></div> : null}
       </div>

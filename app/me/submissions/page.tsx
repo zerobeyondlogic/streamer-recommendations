@@ -4,6 +4,7 @@ import { Clock3, Cloud, Pencil, Send } from "lucide-react";
 import { deleteOwnMarshmallowAction, deleteOwnSubmissionAction, updateOwnMarshmallowAction } from "@/app/actions";
 import { BvText } from "@/components/bv-text";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { MarshmallowReply } from "@/components/marshmallow-reply";
 import { Notice } from "@/components/notice";
 import { SubmissionContentEditor } from "@/components/submission-content-editor";
 import { requireUser } from "@/lib/auth";
@@ -15,11 +16,12 @@ import { formatDate } from "@/lib/view";
 
 export const metadata: Metadata = { title: "我的投稿" };
 
-export default async function MySubmissionsPage({ searchParams }: { searchParams: Promise<{ minePage?: string; error?: string; success?: string }> }) {
+export default async function MySubmissionsPage({ searchParams }: { searchParams: Promise<{ minePage?: string; marshmallow?: string; error?: string; success?: string }> }) {
   const user = await requireUser();
   const params = await searchParams;
-  const minePage = safePageNumber(params.minePage);
-  const [items, marshmallows] = await Promise.all([getMySubmissions(user.id), getMyMarshmallows(user.id, minePage)]);
+  const requestedPage = safePageNumber(params.minePage);
+  const [items, marshmallows] = await Promise.all([getMySubmissions(user.id), getMyMarshmallows(user.id, requestedPage, params.marshmallow)]);
+  const minePage = marshmallows.page;
 
   return <div className="form-page wide personal-records-page">
     <header className="form-header"><span className="eyebrow">个人记录</span><h1>我的投稿</h1><p>所有投稿和棉花糖都在这里。</p></header>
@@ -43,11 +45,12 @@ export default async function MySubmissionsPage({ searchParams }: { searchParams
       <div className="section-heading"><div><span className="eyebrow">棉花糖</span><h2 id="my-marshmallows-title">我的棉花糖</h2></div><span className="live-dot"><Clock3 aria-hidden="true"/> 首次投递顺序</span></div>
       <div className="my-marshmallow-list">{marshmallows.items.map((item) => {
         const editable = canAuthorEditMarshmallow(item.readAt, item.deletedAt);
-        const status = item.deletedAt ? "已移除" : item.publishedAt ? "已上墙" : item.readAt ? "已读 · 未上墙" : "待查看";
-        return <article className={`panel my-marshmallow-card ${editable ? "is-editable" : "is-locked"}`} key={item.id}>
+        const status = item.deletedAt ? "已移除" : item.publishedAt ? "已上墙" : item.unpublishedAt ? "已下架" : item.readAt ? "已读 · 未上墙" : "待查看";
+        return <article className={`panel my-marshmallow-card ${editable ? "is-editable" : "is-locked"}`} id={`my-marshmallow-${item.id}`} key={item.id}>
           <div className="my-marshmallow-meta"><time>投递于 {formatDate(item.createdAt)}</time><span className={`privacy-pill ${item.publishedAt ? "can-publish" : "private"}`}>{status}</span></div>
           <BvText className="my-marshmallow-copy">{item.content}</BvText>
-          <div className="my-marshmallow-footer"><span>{item.allowPublic ? "允许上墙" : "仅神绮爱可见"}</span>{item.updatedAt.getTime() > item.createdAt.getTime() ? <span>修改于 {formatDate(item.updatedAt)}</span> : null}</div>
+          <MarshmallowReply content={item.replyContent} updatedAt={item.replyUpdatedAt ?? item.repliedAt}/>
+          <div className="my-marshmallow-footer"><span>{item.allowPublic ? "允许上墙" : "仅神绮爱可见"}</span>{item.updatedAt.getTime() > item.createdAt.getTime() ? <span>更新于 {formatDate(item.updatedAt)}</span> : null}</div>
           {editable ? <div className="my-marshmallow-actions">
             <details className="my-marshmallow-editor"><summary><Pencil aria-hidden="true"/> 修改</summary><form className="stack" action={updateOwnMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><label>内容<textarea name="content" maxLength={1000} required defaultValue={item.content}/></label><label className="checkbox"><input name="allowPublic" type="checkbox" defaultChecked={item.allowPublic}/><span>已读后允许上墙</span></label><button className="button small primary" type="submit">保存并重新投递</button><span className="helper">首次投递时间不变。</span></form></details>
             <form action={deleteOwnMarshmallowAction}><input name="marshmallowId" type="hidden" value={item.id}/><ConfirmSubmit label="删除" title="删除这颗棉花糖？" description="删除后无法恢复。" confirmLabel="确认删除"/></form>

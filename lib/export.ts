@@ -3,7 +3,7 @@ import { activityLogs, hostMusings, hostReplies, marshmallows, notifications, re
 import { isAllowedBackgroundUrl, isAllowedSiteFontUrl, safeSpreadsheetCell, sha256 } from "./security";
 import type { Cell, Sheet, SheetData } from "write-excel-file/node";
 
-export const SCHEMA_VERSION = "13";
+export const SCHEMA_VERSION = "14";
 const isoDate = () => new Date().toISOString().slice(0, 10);
 const json = (value: unknown) => Buffer.from(JSON.stringify(value, null, 2));
 
@@ -27,7 +27,7 @@ export async function createXlsxExport() {
   const submissionCounts = new Map<string, number>(); submissionRows.forEach((s) => submissionCounts.set(s.userId, (submissionCounts.get(s.userId)??0)+1));
   add("用户", ["用户 ID","用户名","B站 UID","UID 已核验","角色","状态","注册时间","删除时间","投稿数量"], userRows.map((u) => [u.id,u.username,u.bilibiliUid,!!u.bilibiliVerifiedAt,u.role,u.status,u.createdAt,u.deletedAt,submissionCounts.get(u.id)??0]));
   add("通知", ["通知 ID","接收用户 ID","类型","投稿 ID","是否已读","创建时间"], notificationRows.map((n) => [n.id,n.userId,n.type,n.submissionId,!!n.readAt,n.createdAt]));
-  add("棉花糖", ["棉花糖 ID","投稿用户名","内容","允许公开","投稿时间","已读时间","公开时间","是否移除","移除时间"], marshmallowRows.map((m) => [m.id,usernames.get(m.userId),m.content,m.allowPublic,m.createdAt,m.readAt,m.publishedAt,!!m.deletedAt,m.deletedAt]));
+  add("棉花糖", ["棉花糖 ID","投稿用户名","内容","允许公开","投稿时间","已读时间","公开时间","下架时间","主播回复","回复时间","回复更新时间","回复者","是否移除","移除时间"], marshmallowRows.map((m) => [m.id,usernames.get(m.userId),m.content,m.allowPublic,m.createdAt,m.readAt,m.publishedAt,m.unpublishedAt,m.replyContent,m.repliedAt,m.replyUpdatedAt,m.repliedBy?usernames.get(m.repliedBy):null,!!m.deletedAt,m.deletedAt]));
   add("碎碎念", ["碎碎念 ID","主播用户名","内容","是否置顶","置顶时间","发布时间","更新时间"], hostMusingRows.map((m) => [m.id,usernames.get(m.hostUserId),m.content,!!m.pinnedAt,m.pinnedAt,m.createdAt,m.updatedAt]));
   add("用户评价", ["评价 ID","投稿 ID","用户名","推荐","评论","创建时间","更新时间"], reviewRows.map((r) => [r.id,r.submissionId,usernames.get(r.userId),r.recommend,r.comment,r.createdAt,r.updatedAt]));
   add("评价回复", ["回复 ID","主评价 ID","用户名","回复目标用户名","内容","创建时间","更新时间"], reviewReplyRows.map((r) => [r.id,r.reviewId,usernames.get(r.userId),r.replyToUserId?usernames.get(r.replyToUserId):null,r.content,r.createdAt,r.updatedAt]));
@@ -65,7 +65,7 @@ function extensionFromMime(mime:string|null){if(mime?.includes("png"))return ".p
 export async function validateBackup(bytes: Buffer) {
   const JSZip = (await import("jszip")).default; const zip=await JSZip.loadAsync(bytes); const required=["manifest.json","schema-version.txt","users.json","submissions.json","marshmallows.json","host-musings.json","submission-reviews.json","review-replies.json","host-replies.json","notifications.json","site-settings.json","site-copy-settings.json","activity-logs.json","checksums.sha256"];
   for(const name of required) if(!zip.file(name)) throw new Error(`备份缺少 ${name}`);
-  const version=(await zip.file("schema-version.txt")!.async("text")).trim(); if(version!==SCHEMA_VERSION) throw new Error(`不支持的 schema 版本：${version}`);
+  const version=(await zip.file("schema-version.txt")!.async("text")).trim(); if(!["13",SCHEMA_VERSION].includes(version)) throw new Error(`不支持的 schema 版本：${version}`);
   const checksumLines=(await zip.file("checksums.sha256")!.async("text")).trim().split(/\r?\n/);
   for(const line of checksumLines){const [expected,...rest]=line.split(/\s+/);const name=rest.join(" ");const file=zip.file(name);if(!file)throw new Error(`校验文件缺少 ${name}`);const actual=sha256(Buffer.from(await file.async("uint8array")));if(actual!==expected)throw new Error(`${name} 校验值不匹配`);}
   const read=<T>(name:string)=>zip.file(name)!.async("text").then(text=>JSON.parse(text) as T);
