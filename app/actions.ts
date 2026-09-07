@@ -506,14 +506,14 @@ export async function readNotificationAction(form: FormData) {
   const [notification] = await getDb().select({ submissionId: notifications.submissionId, reviewReplyId: notifications.reviewReplyId, marshmallowId: notifications.marshmallowId })
     .from(notifications).where(and(eq(notifications.id, id.data), eq(notifications.userId, user.id))).limit(1);
   if (!notification) go("/me/notifications", "这条消息不存在");
-  await markNotificationRead(user.id, id.data); revalidatePath("/me/notifications");
+  await markNotificationRead(user.id, id.data); revalidatePath("/me/notifications"); revalidatePath("/host");
   if (notification.marshmallowId) redirect(`/me/submissions?marshmallow=${notification.marshmallowId}#my-marshmallow-${notification.marshmallowId}`);
   if (!notification.submissionId) redirect("/me/notifications");
   redirect(notification.reviewReplyId
     ? `/submission/${notification.submissionId}?openReply=${notification.reviewReplyId}#review-reply-${notification.reviewReplyId}`
     : `/submission/${notification.submissionId}#comments`);
 }
-export async function readAllNotificationsAction() { await assertSameOrigin(); const user = await requireUser(); await markAllNotificationsRead(user.id); revalidatePath("/me/notifications"); go("/me/notifications", "全部消息已标记为已读", "success"); }
+export async function readAllNotificationsAction() { await assertSameOrigin(); const user = await requireUser(); await markAllNotificationsRead(user.id); revalidatePath("/me/notifications"); revalidatePath("/host"); go("/me/notifications", "全部消息已标记为已读", "success"); }
 
 export async function openSubmissionAction(form: FormData) {
   await assertSameOrigin(); const host = await requireHost(); const id = submissionId(form);

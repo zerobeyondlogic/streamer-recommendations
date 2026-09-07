@@ -685,18 +685,18 @@ export async function markNotificationRead(userId: string, notificationId: strin
 }
 export async function markAllNotificationsRead(userId: string) { return getDb().update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.userId, userId), isNull(notifications.readAt))); }
 
-export async function getHostStats() {
-  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unreadRows, marshmallowRows, hostMusingRows] = await Promise.all([
+export async function getHostStats(hostId: string) {
+  const [newRows, pendingRows, progressRows, completedRows, pinnedRows, unread, marshmallowRows, hostMusingRows] = await Promise.all([
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.source, "user"), isNull(submissions.hostReadAt), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "pending"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "in_progress"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(eq(submissions.contentStatus, "completed"), isNull(submissions.deletedAt))),
     getDb().select({ value: count() }).from(submissions).where(and(isNotNull(submissions.pinnedAt), isNull(submissions.deletedAt))),
-    getDb().select({ value: count() }).from(notifications).where(isNull(notifications.readAt)),
+    unreadNotificationCount(hostId),
     getDb().select({ value: count() }).from(marshmallows).where(and(isNull(marshmallows.readAt), isNull(marshmallows.deletedAt))),
     getDb().select({ value: count() }).from(hostMusings),
   ]);
-  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unreadRows[0].value, marshmallowRows[0].value, hostMusingRows[0].value];
+  return [newRows[0].value, pendingRows[0].value, progressRows[0].value, completedRows[0].value, pinnedRows[0].value, unread, marshmallowRows[0].value, hostMusingRows[0].value];
 }
 
 export async function getHostSubmissions(filters: { id?:string; view?: "inbox" | "library"; kind?: SubmissionKind; category?: string; status?: string; q?: string; pinned?: boolean } = {}) {
