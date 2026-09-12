@@ -29,7 +29,7 @@ export default async function MarshmallowPage({ searchParams }: { searchParams: 
 
     {user?.role === "user" ? <section className="marshmallow-compose panel">
       <form className="stack" action={submitMarshmallowAction}>
-        <label>想说的话<textarea name="content" maxLength={1000} required placeholder="今天想说什么？"/><span className="helper">最多 1000 字，BV 号会自动链接。</span></label>
+        <label>想说的话<textarea name="content" maxLength={10000} required placeholder="今天想说什么？"/><span className="helper">最多 10000 字，BV 号会自动链接。</span></label>
         <label className="checkbox marshmallow-public-choice"><input name="allowPublic" type="checkbox"/><span><strong>已读后允许上墙</strong><span className="helper">不勾选则始终私密。</span></span></label>
         <button className="button primary" type="submit"><Send aria-hidden="true"/> 投递棉花糖</button>
       </form>

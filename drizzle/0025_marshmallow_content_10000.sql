@@ -1,0 +1,2 @@
+ALTER TABLE "marshmallows" DROP CONSTRAINT "marshmallows_content_length_check";--> statement-breakpoint
+ALTER TABLE "marshmallows" ADD CONSTRAINT "marshmallows_content_length_check" CHECK (char_length("marshmallows"."content") between 1 and 10000);

@@ -36,7 +36,7 @@ export const submissionSchema = z.object({
 });
 
 export const marshmallowSchema = z.object({
-  content: text(1000).min(1, "请写下想对神绮爱说的话"),
+  content: text(10000).min(1, "请写下想对神绮爱说的话"),
   allowPublic: z.coerce.boolean().default(false),
 });
 

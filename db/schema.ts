@@ -107,7 +107,7 @@ export const marshmallows = pgTable("marshmallows", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
-  check("marshmallows_content_length_check", sql`char_length(${table.content}) between 1 and 1000`),
+  check("marshmallows_content_length_check", sql`char_length(${table.content}) between 1 and 10000`),
   check("marshmallows_reply_length_check", sql`${table.replyContent} is null or char_length(${table.replyContent}) between 1 and 2000`),
   index("marshmallows_public_feed_idx").on(table.publishedAt).where(sql`${table.publishedAt} is not null and ${table.deletedAt} is null`),
   index("marshmallows_pending_idx").on(table.createdAt).where(sql`${table.readAt} is null and ${table.deletedAt} is null`),
