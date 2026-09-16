@@ -141,6 +141,38 @@ export const submissionReviews = pgTable("submission_reviews", {
   check("submission_reviews_comment_length_check", sql`${table.comment} is null or char_length(${table.comment}) between 1 and 2000`),
 ]);
 
+export const radioEpisodes = pgTable("radio_episodes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hostUserId: uuid("host_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  episodeNumber: integer("episode_number").notNull(),
+  title: text("title").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("radio_episodes_number_uidx").on(table.episodeNumber),
+  index("radio_episodes_host_idx").on(table.hostUserId, table.episodeNumber),
+  check("radio_episodes_number_check", sql`${table.episodeNumber} >= 1`),
+  check("radio_episodes_title_check", sql`char_length(btrim(${table.title})) between 1 and 120`),
+]);
+
+export const radioEntries = pgTable("radio_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  episodeId: uuid("episode_id").notNull().references(() => radioEpisodes.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  kind: text("kind", { enum: ["story", "submission"] }).notNull().default("story"),
+  position: integer("position").notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("radio_entries_episode_position_idx").on(table.episodeId, table.position, table.createdAt),
+  check("radio_entries_title_check", sql`char_length(btrim(${table.title})) between 1 and 160`),
+  check("radio_entries_content_check", sql`char_length(${table.content}) <= 50000 and char_length(btrim(${table.content})) >= 1`),
+  check("radio_entries_kind_check", sql`${table.kind} in ('story', 'submission')`),
+  check("radio_entries_position_check", sql`${table.position} >= 0`),
+]);
+
 export const reviewReplies = pgTable("review_replies", {
   id: uuid("id").primaryKey().defaultRandom(),
   reviewId: uuid("review_id").notNull().references(() => submissionReviews.id, { onDelete: "cascade" }),
@@ -275,6 +307,8 @@ export type User = typeof users.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type Marshmallow = typeof marshmallows.$inferSelect;
 export type HostMusing = typeof hostMusings.$inferSelect;
+export type RadioEpisode = typeof radioEpisodes.$inferSelect;
+export type RadioEntry = typeof radioEntries.$inferSelect;
 export type SubmissionReview = typeof submissionReviews.$inferSelect;
 export type ReviewReply = typeof reviewReplies.$inferSelect;
 export type MarshmallowLike = typeof marshmallowLikes.$inferSelect;

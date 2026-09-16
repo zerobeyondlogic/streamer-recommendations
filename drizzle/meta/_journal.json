@@ -183,6 +183,13 @@
       "when": 1789237911844,
       "tag": "0025_marshmallow_content_10000",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789544232249,
+      "tag": "0026_chief_madripoor",
+      "breakpoints": true
     }
   ]
 }

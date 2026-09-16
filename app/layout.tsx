@@ -53,7 +53,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <div className="background-overlay" aria-hidden="true" />
         <header className="site-header">
           <nav className="nav-shell" aria-label="主导航">
-            <div className="nav-top"><Link href="/" className="brand"><span className={`brand-mark${siteIconUrl ? " has-custom-icon" : ""}`} style={siteIconUrl ? { backgroundImage: `url("${siteIconUrl}")` } : undefined}>{siteIconUrl ? null : <Sparkles aria-hidden="true"/>}</span><span>{settings.siteName}</span></Link>
+            <div className="nav-top"><div className="brand"><Link href="/radio" className="radio-entry-link" aria-label="小羊老师电台" title="小羊老师电台"><span className={`brand-mark${siteIconUrl ? " has-custom-icon" : ""}`} style={siteIconUrl ? { backgroundImage: `url("${siteIconUrl}")` } : undefined}>{siteIconUrl ? null : <Sparkles aria-hidden="true"/>}</span></Link><Link href="/" className="brand-home">{settings.siteName}</Link></div>
             <div className="nav-links account-links">
               <ThemeModeToggle/>
               {user ? <NotificationLink unread={unread}/> : null}
